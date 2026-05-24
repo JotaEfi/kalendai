@@ -185,4 +185,4 @@ kalendai/
 
 ## Licenca
 
-Defina a licenca antes de publicar o repositorio, por exemplo MIT, Apache-2.0 ou proprietaria.
+Apache-2.0.
