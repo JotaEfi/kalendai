@@ -1,0 +1,21 @@
+{
+  "project": {
+    "name": "kalendai",
+    "version": "1.0.0",
+    "description": "Gestão focada de tempo e produtividade com Kanban diário, upload de evidências no MinIO e IA"
+  },
+  "workflows": {
+    "autoCommit": false,
+    "requireTests": true,
+    "codeStyle": {
+      "indent": 2,
+      "semicolons": true,
+      "singleQuotes": true
+    }
+  },
+  "features": {
+    "intel": {
+      "enabled": true
+    }
+  }
+}

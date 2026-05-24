@@ -1,0 +1,30 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Local databases, dumps and generated runtime data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sql
+uploads/
+backend/uploads/
+backend/prisma/dev.db
+backend/prisma/dump.sql
+
+# Package manager / tool caches
+.npm/
+.pnpm-store/
+.turbo/
+.vite/
+
+# OS/editor noise
+Thumbs.db
+.idea/
+.vscode/

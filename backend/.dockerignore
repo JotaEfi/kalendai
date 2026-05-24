@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+uploads
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+prisma/dev.db
+prisma/dump.sql
