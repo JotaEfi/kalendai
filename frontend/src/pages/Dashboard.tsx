@@ -391,6 +391,7 @@ export default function Dashboard() {
                 onMonthChange={setCurrentMonth}
                 onSelectReport={(report, date) => setSelectedState({ report, date })}
                 onGenerateReport={handleGenerateReport}
+                isGenerating={generating}
               />
             </div>
 

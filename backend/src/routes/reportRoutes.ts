@@ -1,9 +1,25 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { processDailyReport, getNextReportVersion } from '../services/kanbanService.js';
+import { checkAIStatus } from '../services/aiService.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
 
 const router = Router();
+
+/**
+ * GET /api/reports/ai-status
+ * Diagnóstico do serviço de IA — retorna provider, model, chave e resultado de teste
+ * Rota deve estar ANTES de /:date para o Express não interpretar 'ai-status' como data
+ */
+router.get('/ai-status', async (req: AuthRequest, res: any) => {
+  try {
+    const status = await checkAIStatus();
+    const httpStatus = status.testResult === 'ok' ? 200 : status.testResult === 'no_key' ? 503 : 502;
+    res.status(httpStatus).json(status);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Erro ao verificar status da IA', detail: error.message });
+  }
+});
 
 /**
  * GET /api/reports/:date

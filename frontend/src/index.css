@@ -101,3 +101,18 @@ html.dark-theme .text-gray-600 {
 html.dark-theme .text-gray-500 {
   color: #333333 !important;
 }
+
+/* Global resets for pointer cursor on all clickable elements */
+button,
+a,
+select,
+option,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+[role="button"],
+.cursor-pointer,
+.clickable {
+  cursor: pointer !important;
+}

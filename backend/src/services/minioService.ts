@@ -13,6 +13,18 @@ const minioClient = new S3Client({
   forcePathStyle: true, // Needed for MinIO
 });
 
+const resolvedPublicEndpoint = (process.env.MINIO_PUBLIC_URL || process.env.MINIO_ENDPOINT || 'http://localhost:9000').replace(/\/$/, '');
+
+const publicMinioClient = new S3Client({
+  endpoint: resolvedPublicEndpoint,
+  region: 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.MINIO_ACCESS_KEY || '',
+    secretAccessKey: process.env.MINIO_SECRET_KEY || ''
+  },
+  forcePathStyle: true,
+});
+
 const bucketName = process.env.MINIO_BUCKET_NAME || 'kalend-ai-images';
 
 export let isLocalFallback = false;
@@ -73,22 +85,7 @@ export async function getPresignedUrl(objectKey: string): Promise<string> {
     });
     
     // URL expires in 1 hour
-    const url = await getSignedUrl(minioClient, command, { expiresIn: 3600 });
-
-    // Transform internal Docker minio hostname to public endpoint for external browser consumption
-    if (process.env.MINIO_PUBLIC_URL) {
-      const internalEndpoint = process.env.MINIO_ENDPOINT || 'http://minio:9000';
-      if (url.startsWith(internalEndpoint)) {
-        return url.replace(internalEndpoint, process.env.MINIO_PUBLIC_URL);
-      }
-
-      // Also support replacing standard variations (e.g. minio container dns http://minio:9000)
-      const containerEndpoint = 'http://minio:9000';
-      if (url.startsWith(containerEndpoint)) {
-        return url.replace(containerEndpoint, process.env.MINIO_PUBLIC_URL);
-      }
-    }
-    
+    const url = await getSignedUrl(publicMinioClient, command, { expiresIn: 3600 });
     return url;
   } catch (err: any) {
     console.error(`Error generating presigned URL for ${objectKey}:`, err.message);

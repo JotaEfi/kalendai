@@ -22,7 +22,7 @@ export function KanbanCardUI({ card, isPastDay, handleOpenEditModal, formatDurat
         {...attributes}
         {...listeners}
         onClick={() => handleOpenEditModal(card)}
-        className={`flex flex-col gap-1.5 bg-white rounded p-3 shadow-sm border-l-4 relative transition-all duration-200 ${!isPastDay ? 'cursor-grab hover:bg-gray-50' : ''} ${isDone ? 'opacity-80' : ''} ${isDragging ? 'opacity-30' : ''}`}
+        className={`flex flex-col gap-1.5 bg-white rounded p-3 shadow-sm border-l-4 relative transition-all duration-200 cursor-pointer hover:bg-gray-50 ${isDone ? 'opacity-80' : ''} ${isDragging ? 'opacity-30' : ''}`}
       >
         <div className="flex justify-between items-start gap-2">
           <p className={`text-sm font-bold leading-tight ${isDone ? 'line-through text-gray-500' : 'text-gray-800'}`}>{card.title}</p>

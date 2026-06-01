@@ -14,20 +14,20 @@ services:
       - network_swarm_public
     restart: unless-stopped
 
-  # minio: (desativado — para ativar, descomentar e ajustar credenciais no .env)
-  #   image: minio/minio:latest
-  #   environment:
-  #     MINIO_ROOT_USER: sua_access_key
-  #     MINIO_ROOT_PASSWORD: sua_secret_key
-  #   ports:
-  #     - "9000:9000"
-  #     - "9001:9001"
-  #   volumes:
-  #     - minio_data:/data
-  #   networks:
-  #     - network_swarm_public
-  #   command: server /data --console-address ":9001"
-  #   restart: unless-stopped
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-sua_access_key}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-sua_secret_key}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - network_swarm_public
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
 
   backend:
     build: ./backend
@@ -60,4 +60,5 @@ networks:
 volumes:
   postgres_data:
   uploads_data:
-  # minio_data: (desativado junto com o serviço minio)
+  minio_data:
+

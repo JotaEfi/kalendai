@@ -164,7 +164,7 @@ export default function Calendar() {
 
   const handleGenerateReport = async () => {
     setIsGeneratingReport(true);
-    setDailyReport('Gerando relatório com IA...');
+    setDailyReport('Gerando relatório...');
     try {
       const offset = selectedDate.getTimezoneOffset() * 60000;
       const localDate = new Date(selectedDate.getTime() - offset);
@@ -174,9 +174,9 @@ export default function Calendar() {
     } catch (err: any) {
       console.error(err);
       if (err.response?.status === 500 && err.response?.data?.error === 'AI_API_KEY not configured') {
-         setDailyReport('Erro: a chave de API da IA nao esta configurada no servidor (AI_API_KEY).');
+         setDailyReport('Erro: chave de API não configurada.');
       } else {
-         setDailyReport('Falha ao obter relatório da IA.');
+         setDailyReport('Falha ao obter relatório.');
       }
     } finally {
       setIsGeneratingReport(false);
@@ -813,8 +813,8 @@ export default function Calendar() {
                      <button 
                         onClick={handleGenerateReport} 
                         disabled={isGeneratingReport}
-                        title="Gerar Relatório com IA" 
-                        className="bg-[#70b500] text-white py-1.5 px-3 rounded text-xs font-bold hover:bg-[#5a9200] transition-colors flex items-center gap-1 shadow-sm disabled:opacity-50"
+                        title="Gerar Relatório" 
+                        className="bg-[#70b500] text-white py-1.5 px-3 rounded text-xs font-bold hover:bg-[#5a9200] transition-colors flex items-center gap-1 shadow-sm disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                      >
                         {isGeneratingReport ? (
                           <>
@@ -823,7 +823,7 @@ export default function Calendar() {
                           </>
                         ) : (
                           <>
-                             <svg fill="currentColor" viewBox="0 0 24 24" className="w-3 h-3"><path d="M11.996 22a.5.5 0 01-.482-.363c-.147-.518-.28-1.026-.457-1.517-.552-1.52-1.31-2.903-2.316-4.148-1.002-1.242-2.22-2.274-3.585-3.08-1.514-.897-3.14-1.464-4.838-1.74a4.436 4.436 0 01-2.146-.665.5.5 0 01-.22-.38.483.483 0 01.218-.386 4.384 4.384 0 012.164-.694c2.818-.46 5.405-1.764 7.575-3.843 1.134-1.085 2.05-2.348 2.686-3.842a12.19 12.19 0 00.916-3.033A.5.5 0 0111.996 2a.5.5 0 01.488.318A12.35 12.35 0 0013.4 5.341c.642 1.488 1.56 2.744 2.695 3.823A11.024 11.024 0 0023.633 13a.49.49 0 01.22.383.498.498 0 01-.21.383 4.329 4.329 0 01-1.792.653c-.567.098-1.13.238-1.685.407-3.415 1.04-6.177 3.32-7.854 6.425a12.01 12.01 0 00-1.84 4.423.518.518 0 01-.476.326z"></path></svg>
+                             <FileText size={12} />
                              &nbsp;Gerar
                           </>
                         )}
@@ -1055,13 +1055,7 @@ export default function Calendar() {
                               alt="MinIO anexo" 
                               className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" 
                               onClick={() => {
-                                const win = window.open();
-                                win?.document.write(`
-                                  <title>Visualizar Imagem MinIO</title>
-                                  <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#0f0f0f;font-family:sans-serif;">
-                                    <img src="${img.url}" style="max-width:100%;max-height:100%;object-fit:contain;box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);" />
-                                  </body>
-                                `);
+                                window.open(img.url, '_blank', 'noopener,noreferrer');
                               }}
                             />
                           ) : (

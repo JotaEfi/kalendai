@@ -10,7 +10,10 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar todas as dependências (incluindo devDependencies para build)
-RUN npm ci --audit=false
+# Usando npm install em vez de npm ci para evitar problemas de lockfile
+# cross-plataforma (Windows host → Alpine Linux container) com dependências
+# como vitest que têm binários específicos de OS.
+RUN npm install --audit=false --ignore-scripts
 
 # Copiar pasta Prisma e gerar o Prisma Client
 COPY prisma ./prisma
@@ -33,8 +36,9 @@ ENV NODE_ENV=production
 # Copiar dependências do package.json
 COPY package*.json ./
 
-# Instalar apenas dependências de produção
-RUN npm ci --omit=dev --audit=false
+# Instalar apenas dependências de produção (sem devDeps como vitest)
+# npm ci é seguro aqui pois as deps de produção não têm binários OS-específicos
+RUN npm install --omit=dev --audit=false --ignore-scripts
 
 # Instalar tsx globalmente de forma leve para executar o seeder TypeScript de produção
 RUN npm install -g tsx

@@ -22,6 +22,7 @@ interface ReportCalendarProps {
   onMonthChange?: (month: string) => void;
   onSelectReport: (report: ReportItem, date: string) => void;
   onGenerateReport?: (date: string) => void;
+  isGenerating?: boolean;
 }
 
 function getVersionBadge(version: number, reportType: string) {
@@ -39,7 +40,8 @@ export default function ReportCalendar({
   currentMonth,
   onMonthChange,
   onSelectReport,
-  onGenerateReport
+  onGenerateReport,
+  isGenerating = false
 }: ReportCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
@@ -129,7 +131,7 @@ export default function ReportCalendar({
               key={dayStr}
               onClick={() => setSelectedDate(isSelected ? null : dayStr)}
               className={[
-                'bg-white h-[52px] flex flex-col items-center justify-start pt-1.5 gap-0.5 transition-all duration-150 relative',
+                'bg-white h-[52px] flex flex-col items-center justify-start pt-1.5 gap-0.5 transition-all duration-150 relative cursor-pointer',
                 isSelected ? 'bg-blue-50 ring-2 ring-inset ring-[var(--color-primary)]' : 'hover:bg-slate-50',
               ].join(' ')}
               title={hasSomething ? `${dayReports.length} relatório(s) em ${dayStr}` : `Sem relatórios em ${dayStr}`}
@@ -176,13 +178,21 @@ export default function ReportCalendar({
             <span className="text-xs font-bold text-slate-700">
               {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
             </span>
-            {onGenerateReport && selectedReports.filter(r => r.reportType !== 'AUTOMATIC').length < 2 && (
+            {onGenerateReport && selectedDate && selectedDate <= todayStr && selectedReports.filter(r => r.reportType !== 'AUTOMATIC').length < (selectedDate < todayStr ? 1 : 2) && (
               <button
                 onClick={() => onGenerateReport(selectedDate)}
-                className="text-[10px] font-bold px-2 py-1 rounded-lg transition-all"
+                disabled={isGenerating}
+                className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
               >
-                + Gerar Relatório IA
+                {isGenerating ? (
+                  <>
+                    <span className="w-2.5 h-2.5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"></span>
+                    Gerando...
+                  </>
+                ) : (
+                  <>+ Gerar relatório com IA</>
+                )}
               </button>
             )}
           </div>
@@ -190,13 +200,21 @@ export default function ReportCalendar({
           {selectedReports.length === 0 ? (
             <div className="p-4 text-center">
               <p className="text-xs text-slate-400">Nenhum relatório neste dia.</p>
-              {onGenerateReport && (
+              {onGenerateReport && selectedDate && selectedDate <= todayStr && (
                 <button
                   onClick={() => onGenerateReport(selectedDate)}
-                  className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all"
+                  disabled={isGenerating}
+                  className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed mx-auto"
                   style={{ background: 'var(--color-primary)', color: 'white' }}
                 >
-                  Gerar Primeiro Relatório
+                  {isGenerating ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Gerando relatório...
+                    </>
+                  ) : (
+                    <>Gerar primeiro relatório com IA</>
+                  )}
                 </button>
               )}
             </div>
@@ -208,7 +226,7 @@ export default function ReportCalendar({
                   <button
                     key={report.id}
                     onClick={() => onSelectReport(report, selectedDate)}
-                    className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-150 text-left transition-all group"
+                    className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-150 text-left transition-all group cursor-pointer"
                   >
                     <span
                       style={{ background: badge.bg, color: badge.color }}

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
 import { generateDailyReport } from '../services/aiProvider.js';
 import { uploadFile, getPresignedUrl, deleteFile } from '../services/minioService.js';
+import { generateReportFallback } from '../services/aiService.js';
 import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
@@ -22,6 +23,33 @@ const upload = multer({
 });
 
 const router = Router();
+
+// Helper function to enrich cards with images and presigned URLs
+async function enrichCardsWithUrls(cards: any | any[]) {
+  const isArray = Array.isArray(cards);
+  const cardList = isArray ? cards : [cards];
+
+  const enriched = await Promise.all(cardList.map(async (card) => {
+    // If the database query did not include images, we fetch them dynamically
+    let images = card.images;
+    if (images === undefined) {
+      images = await prisma.cardImage.findMany({
+        where: { cardId: card.id }
+      });
+    }
+
+    if (images && images.length > 0) {
+      const imagesWithUrls = await Promise.all(images.map(async (img: any) => {
+        const url = await getPresignedUrl(img.objectKey);
+        return { ...img, url };
+      }));
+      return { ...card, images: imagesWithUrls };
+    }
+    return { ...card, images: [] };
+  }));
+
+  return isArray ? enriched : enriched[0];
+}
 
 router.get('/reports', async (req: AuthRequest, res: any) => {
   try {
@@ -68,7 +96,7 @@ router.get('/report', async (req: AuthRequest, res: any) => {
   }
 });
 
-// POST endpoint to generate daily report via the configured AI provider
+// POST endpoint to generate daily report locally via script (without AI)
 router.post('/report', async (req: AuthRequest, res: any) => {
   try {
     const userId = req.user?.userId;
@@ -76,13 +104,6 @@ router.post('/report', async (req: AuthRequest, res: any) => {
     
     if (!userId || !dateStr) {
       return res.status(400).json({ error: 'Missing userId or dateStr' });
-    }
-
-    const aiProvider = process.env.AI_PROVIDER || 'deepseek';
-    const aiApiKey = process.env.AI_API_KEY;
-    
-    if (!aiApiKey) {
-      return res.status(500).json({ error: 'AI_API_KEY not configured' });
     }
 
     const dayDate = new Date(dateStr);
@@ -99,71 +120,48 @@ router.post('/report', async (req: AuthRequest, res: any) => {
       }
     });
 
-    if (dayCards.length === 0) {
-      const emptyText = "Nenhuma tarefa registrada para este dia. Aproveite o dia livre!\n\nRelatório de Atividades:";
-      
-      const savedReport = await prisma.dailyReport.upsert({
-        where: { userId_date_version: { userId, date: dayDate, version: 1 } },
-        update: { content: emptyText, isAutomatic: false },
-        create: { userId, date: dayDate, content: emptyText, isAutomatic: false, version: 1, reportType: 'AI_MANUAL' }
-      });
+    const concluidas: any[] = [];
+    const abertas: string[] = [];
+    const progresso: string[] = [];
 
-      return res.json({ result: savedReport.content });
+    for (const card of dayCards) {
+      if (card.status === 'DONE') {
+        let duracao = 0;
+        if (card.completedAt) {
+          const start = card.originalDayDate ? new Date(card.originalDayDate).getTime() : card.createdAt.getTime();
+          duracao = Math.max(0, Math.round((new Date(card.completedAt).getTime() - start) / 60000));
+        }
+
+        let urls: string[] = [];
+        if (card.images && card.images.length > 0) {
+          urls = await Promise.all(card.images.map((img: any) => getPresignedUrl(img.objectKey)));
+        }
+
+        concluidas.push({
+          titulo: card.title,
+          descricao: card.description || '',
+          duracao_minutos: duracao,
+          tem_imagem: card.images.length > 0,
+          imagens: urls
+        });
+      } else if (card.status === 'OPEN') {
+        abertas.push(card.title);
+      } else {
+        progresso.push(card.title);
+      }
     }
 
-    const tarefas_concluidas = dayCards.filter((c: any) => c.status === 'DONE').map((c: any) => {
-      let duracao_minutos = 0;
-      if (c.completedAt) {
-        const start = c.originalDayDate ? new Date(c.originalDayDate) : new Date(c.createdAt);
-        duracao_minutos = Math.max(0, Math.floor((new Date(c.completedAt).getTime() - start.getTime()) / 60000));
-      }
-      return {
-        titulo: c.title,
-        descricao: c.description || undefined,
-        duracao_minutos,
-        tem_imagem: c.images && c.images.length > 0,
-        url_imagem: c.images?.[0] ? `https://storage.example.com/${c.images[0].bucket}/${c.images[0].objectKey}` : undefined // placeholder URL for AI context if needed
-      }
-    });
-
-    const tarefas_em_aberto = dayCards.filter((c: any) => c.status === 'OPEN').map((c: any) => c.title);
-    const tarefas_em_progresso = dayCards.filter((c: any) => c.status === 'IN_PROGRESS').map((c: any) => c.title);
-
-    const payload = JSON.stringify({
+    const reportPayload = {
       data: dateStr,
-      tarefas_concluidas,
-      tarefas_em_aberto,
-      tarefas_em_progresso
-    }, null, 2);
+      total_criadas: dayCards.length,
+      total_concluidas: concluidas.length,
+      tarefas_concluidas: concluidas,
+      tarefas_em_aberto: abertas,
+      tarefas_em_progresso: progresso,
+      versao: 1
+    };
 
-    const [yyyy, mm, dd] = dateStr.split('-');
-    const formattedDate = `${dd}/${mm}/${yyyy}`;
-
-    const systemPrompt = `Você é um assistente que gera relatórios diários de atividades.
-Baseado no seguinte JSON de tarefas, escreva um texto descritivo em português brasileiro.
-O relatório deve conter:
-- Resumo geral do dia: quantas tarefas foram criadas, quantas foram concluídas, quantas permanecem em andamento.
-- Detalhamento de cada tarefa concluída no dia (Título, breve descrição se houver, tempo que levou para ser concluída formatado de forma legível como "X horas e Y minutos", e se havia imagens).
-- Listagem das tarefas que ficaram em aberto (sem análise, apenas o título).
-NÃO inclua sugestões de melhoria ou críticas ao usuário. Entregue direto o corpo do texto sem cabeçalhos em markdown (use um formato de parágrafos legível).
-
-JSON:
-${payload}`;
-
-    let generatedText = '';
-    try {
-       generatedText = await generateDailyReport(systemPrompt, {
-         apiKey: aiApiKey,
-         provider: aiProvider,
-         model: process.env.AI_MODEL || 'deepseek-chat',
-         baseUrl: process.env.AI_BASE_URL
-       });
-    } catch(aiError: any) {
-       console.error("AI Generation error:", aiError);
-       return res.status(500).json({ error: 'Erro ao comunicar com o modelo de IA.', details: aiError.message });
-    }
-
-    const finalReport = `Relatório de Atividades ${formattedDate}:\n\n${generatedText}`;
+    const finalReport = generateReportFallback(reportPayload);
 
     // Upsert the daily report in database (V1 slot for legacy kanban route)
     const savedReport = await prisma.dailyReport.upsert({
@@ -210,7 +208,8 @@ router.get('/pending', async (req: AuthRequest, res: any) => {
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
     });
 
-    res.json(cards);
+    const enriched = await enrichCardsWithUrls(cards);
+    res.json(enriched);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Erro ao buscar cards pendentes' });
@@ -236,7 +235,8 @@ router.get('/month/:year/:month', async (req: AuthRequest, res: any) => {
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
     });
 
-    res.json(cards);
+    const enriched = await enrichCardsWithUrls(cards);
+    res.json(enriched);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Erro ao buscar cards do mês' });
@@ -265,18 +265,8 @@ router.get('/:date', async (req: AuthRequest, res: any) => {
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
     });
     
-    const cardsWithUrls = await Promise.all(cards.map(async (card) => {
-      if (card.images && card.images.length > 0) {
-        const imagesWithUrls = await Promise.all(card.images.map(async (img) => {
-          const url = await getPresignedUrl(img.objectKey);
-          return { ...img, url };
-        }));
-        return { ...card, images: imagesWithUrls };
-      }
-      return card;
-    }));
-    
-    res.json(cardsWithUrls);
+    const enriched = await enrichCardsWithUrls(cards);
+    res.json(enriched);
   } catch (error: any) {
     console.error(error);
     if (error.name === 'PrismaClientInitializationError' || (error.code && error.code.startsWith('P'))) {
@@ -364,7 +354,8 @@ router.put('/:id', async (req: AuthRequest, res: any) => {
       data: updateData
     });
 
-    res.json(card);
+    const enriched = await enrichCardsWithUrls(card);
+    res.json(enriched);
   } catch (error: any) {
     console.error(error);
     if (error.name === 'PrismaClientInitializationError' || (error.code && error.code.startsWith('P'))) {
