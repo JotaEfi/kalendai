@@ -34,6 +34,12 @@ jobs:
       - name: Generate Prisma Client
         run: npm run prisma:generate --workspace=backend
 
+      - name: Lint code
+        run: npm run lint --workspaces
+
+      - name: Run backend unit tests
+        run: npm run test --workspace=backend
+
       - name: Build workspaces
         run: npm run build --workspaces
 

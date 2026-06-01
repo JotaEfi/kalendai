@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_DB: ${DATABASE_DB:-kalend_ai}
+      POSTGRES_USER: ${DATABASE_USER:-kalend_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-kalend_pass}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - network_swarm_public
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_prod_data:/data
+    networks:
+      - network_swarm_public
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+  backend:
+    image: ${DOCKER_USERNAME:-jotaefi}/kalendai-backend:latest
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:-kalend_user}:${DATABASE_PASSWORD:-kalend_pass}@postgres:5432/${DATABASE_DB:-kalend_ai}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      REFRESH_TOKEN_EXPIRES_IN: 7d
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kalend-ai-images}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
+      AI_PROVIDER: ${AI_PROVIDER}
+      AI_API_KEY: ${AI_API_KEY}
+      AI_MODEL: ${AI_MODEL}
+      AI_BASE_URL: ${AI_BASE_URL}
+      PORT: 3001
+      NODE_ENV: production
+      TIMEZONE: ${TIMEZONE:-America/Sao_Paulo}
+      DISABLE_WEEKENDS: ${DISABLE_WEEKENDS:-false}
+      MAX_ATTACHMENT_SIZE_MB: ${MAX_ATTACHMENT_SIZE_MB:-20}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - minio
+    volumes:
+      - uploads_prod_data:/app/uploads
+    networks:
+      - network_swarm_public
+    restart: unless-stopped
+
+  frontend:
+    image: ${DOCKER_USERNAME:-jotaefi}/kalendai-frontend:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - network_swarm_public
+    restart: unless-stopped
+
+networks:
+  network_swarm_public:
+    external: true
+    name: network_swarm_public
+
+volumes:
+  postgres_prod_data:
+  uploads_prod_data:
+  minio_prod_data:
