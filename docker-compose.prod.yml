@@ -36,7 +36,7 @@ services:
       JWT_EXPIRES_IN: 15m
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
       REFRESH_TOKEN_EXPIRES_IN: 7d
-      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kalend-ai-images}
@@ -66,13 +66,26 @@ services:
 
   frontend:
     image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-frontend:latest
-    ports:
-      - "80:80"
     depends_on:
       - backend
     networks:
       - network_swarm_public
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
+      - "traefik.http.routers.kalendai.entrypoints=web,websecure"
+      - "traefik.http.routers.kalendai.tls=true"
+      - "traefik.http.routers.kalendai.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kalendai.loadbalancer.server.port=80"
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
+        - "traefik.http.routers.kalendai.entrypoints=web,websecure"
+        - "traefik.http.routers.kalendai.tls=true"
+        - "traefik.http.routers.kalendai.tls.certresolver=letsencrypt"
+        - "traefik.http.services.kalendai.loadbalancer.server.port=80"
 
 networks:
   network_swarm_public:
