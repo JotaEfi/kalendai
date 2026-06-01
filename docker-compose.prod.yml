@@ -1,33 +1,18 @@
 version: "3.9"
 
+# ============================================================
+# KalendAI — Stack de Produção (apenas backend + frontend)
+#
+# Dependências externas (já rodando na VPS):
+#   - PostgreSQL: pgvector_postgres (rede network_swarm_public)
+#   - MinIO: https://s3.excellenceestudio.com.br
+#
+# Deploy: docker stack deploy -c docker-compose.prod.yml kalendai
+# ============================================================
+
 services:
-  postgres:
-    image: ankane/pgvector:latest
-    environment:
-      POSTGRES_DB: ${DATABASE_DB:-kalend_ai}
-      POSTGRES_USER: ${DATABASE_USER:-kalend_user}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-kalend_pass}
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-    networks:
-      - network_swarm_public
-    restart: unless-stopped
 
-  minio:
-    image: minio/minio:latest
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_prod_data:/data
-    networks:
-      - network_swarm_public
-    command: server /data --console-address ":9001"
-    restart: unless-stopped
-
+  # ── Backend API ──────────────────────────────────────────
   backend:
     image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-backend:latest
     environment:
@@ -36,11 +21,13 @@ services:
       JWT_EXPIRES_IN: 15m
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
       REFRESH_TOKEN_EXPIRES_IN: 7d
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      # MinIO externo (HTTPS) — usado pelo backend para uploads/downloads
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-https://s3.excellenceestudio.com.br}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kalend-ai-images}
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
+      # URL pública para geração de presigned URLs (acesso pelo browser)
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://s3.excellenceestudio.com.br}
       AI_PROVIDER: ${AI_PROVIDER}
       AI_API_KEY: ${AI_API_KEY}
       AI_MODEL: ${AI_MODEL}
@@ -54,17 +41,19 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_NAME: ${ADMIN_NAME}
       FRONTEND_URL: ${FRONTEND_URL}
-    ports:
-      - "3001:3001"
-    depends_on:
-      - postgres
-      - minio
     volumes:
       - uploads_prod_data:/app/uploads
     networks:
       - network_swarm_public
     restart: unless-stopped
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
 
+  # ── Frontend (Nginx + React) ──────────────────────────────
   frontend:
     image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-frontend:latest
     depends_on:
@@ -80,6 +69,9 @@ services:
       - "traefik.http.routers.kalendai.tls.certresolver=letsencrypt"
       - "traefik.http.services.kalendai.loadbalancer.server.port=80"
     deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
@@ -94,6 +86,4 @@ networks:
     name: network_swarm_public
 
 volumes:
-  postgres_prod_data:
   uploads_prod_data:
-  minio_prod_data:
