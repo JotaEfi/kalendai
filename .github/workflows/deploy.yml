@@ -2,9 +2,9 @@ name: KalendAI CI/CD
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, master]
   push:
-    branches: [main]
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -56,7 +56,7 @@ jobs:
     name: Publish and Deploy
     runs-on: ubuntu-latest
     needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: production
     steps:
       - name: Checkout
