@@ -30,8 +30,8 @@ req.setTimeout(2500, () => {
 });
 " || true
 
-echo "2. Aguardando banco de dados e aplicando migrações Prisma..."
-npx prisma migrate deploy
+echo "2. Aguardando banco de dados e sincronizando esquema Prisma..."
+npx prisma db push --skip-generate
 
 echo "3. Executando o seeder idempotente para garantir o administrador padrão..."
 npx tsx seed.ts
