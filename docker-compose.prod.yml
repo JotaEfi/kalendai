@@ -31,7 +31,7 @@ services:
   backend:
     image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-backend:latest
     environment:
-      DATABASE_URL: postgresql://${DATABASE_USER:-kalend_user}:${DATABASE_PASSWORD:-kalend_pass}@postgres:5432/${DATABASE_DB:-kalend_ai}?schema=public
+      DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 15m
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}

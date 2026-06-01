@@ -10,5 +10,6 @@ uploads
 *.sqlite
 *.sqlite3
 *.sql
+!**/migrations/**/*.sql
 prisma/dev.db
 prisma/dump.sql
