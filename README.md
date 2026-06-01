@@ -2,7 +2,7 @@
 
 > Calendario, Kanban diario e relatorios inteligentes para transformar rotina em evidencia, foco e evolucao mensuravel.
 
-KalendAI e uma aplicacao full-stack para gestao de produtividade pessoal ou corporativa. A ideia central e simples: cada dia tem seu proprio Kanban, as tarefas podem receber evidencias visuais, e uma IA gera relatorios objetivos sobre o que aconteceu. O resultado e uma agenda operacional que nao vira lista infinita, mas sim um registro vivo de progresso.
+KalendAI é uma aplicação full-stack para gestão de produtividade pessoal ou corporativa. A ideia central é simples: cada dia tem seu próprio Kanban, as tarefas podem receber evidencias visuais, e uma IA gera relatórios objetivos sobre o que aconteceu. O resultado é uma agenda operacional que não vira lista infinita, mas sim um registro vivo de progresso.
 
 ## O Que O Projeto Entrega
 
