@@ -7,8 +7,8 @@ echo "=== [KalendAI Boot] ==="
 
 echo "1. Verificando infraestrutura MinIO no ambiente..."
 node -e "
-const http = require('http');
 const endpoint = process.env.MINIO_ENDPOINT || 'http://minio:9000';
+const http = endpoint.startsWith('https') ? require('https') : require('http');
 console.log('Sondando conexão com MinIO em:', endpoint);
 const req = http.get(endpoint + '/minio/health/live', (res) => {
   if (res.statusCode === 200) {
