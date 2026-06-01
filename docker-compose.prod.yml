@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: ${DOCKER_USERNAME:-jotaefi}/kalendai-backend:latest
+    image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-backend:latest
     environment:
       DATABASE_URL: postgresql://${DATABASE_USER:-kalend_user}:${DATABASE_PASSWORD:-kalend_pass}@postgres:5432/${DATABASE_DB:-kalend_ai}?schema=public
       JWT_SECRET: ${JWT_SECRET}
@@ -50,6 +50,9 @@ services:
       TIMEZONE: ${TIMEZONE:-America/Sao_Paulo}
       DISABLE_WEEKENDS: ${DISABLE_WEEKENDS:-false}
       MAX_ATTACHMENT_SIZE_MB: ${MAX_ATTACHMENT_SIZE_MB:-20}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME}
     ports:
       - "3001:3001"
     depends_on:
@@ -62,7 +65,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ${DOCKER_USERNAME:-jotaefi}/kalendai-frontend:latest
+    image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-frontend:latest
     ports:
       - "80:80"
     depends_on:
