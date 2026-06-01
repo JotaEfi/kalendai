@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Settings, Minimize2, Maximize2, X, AlertCirc
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -11,7 +11,6 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
-  closestCenter,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -142,7 +141,13 @@ export default function Calendar() {
     try {
       setAssigningCard(true);
       await api.post(`/kanban/${editingCard.id}/assign`, { receiverId: assigneeId });
-      alert('Proposta de atribuição enviada com sucesso para a Inbox do destinatário!');
+      alert('Tarefa enviada com sucesso! Ela ficará oculta no seu Kanban até que o destinatário a aceite ou recuse.');
+      
+      // Filter out the card immediately from local states (flying card state)
+      setCards(prev => prev.filter(c => c.id !== editingCard.id));
+      setMonthCards(prev => prev.filter(c => c.id !== editingCard.id));
+      window.dispatchEvent(new Event('tasksUpdated'));
+      
       setAssigneeId('');
       setEditingCard(null);
     } catch (err: any) {
@@ -373,7 +378,11 @@ export default function Calendar() {
       if (isOverTask) {
         const overIndex = newCards.findIndex((c) => c.id === overId);
         if (newCards[activeIndex].status !== newCards[overIndex].status) {
+          // Move between columns
           newCards[activeIndex] = { ...newCards[activeIndex], status: newCards[overIndex].status };
+          return arrayMove(newCards, activeIndex, overIndex);
+        } else if (activeIndex !== overIndex) {
+          // Smooth glide/reorder in real-time within the same column!
           return arrayMove(newCards, activeIndex, overIndex);
         }
       }
@@ -599,7 +608,7 @@ export default function Calendar() {
     <div className="flex relative min-h-full xl:h-full p-4 md:p-8 gap-4 md:gap-8 xl:overflow-hidden flex-col xl:flex-row-reverse">
       {/* KANBAN AND CALENDAR LAYOUT (Kanban is physically 2nd in DOM but first via row-reverse) */}
       
-      <div className={`${getCalendarWidthCls()} xl:h-full xl:overflow-y-auto min-h-0 flex flex-col gap-4 transition-all duration-500 ease-in-out [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]`}>
+      <div className={`${getCalendarWidthCls()} xl:h-full xl:overflow-y-auto min-h-0 flex flex-col gap-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]`}>
         {/* SIDE MAIN CALENDAR */}
         <div className="flex flex-col bg-white p-6 rounded-xl shadow-sm border border-[#DFE1E6] shrink-0">
           <div className="flex items-center justify-between mb-4 shrink-0">
@@ -676,11 +685,25 @@ export default function Calendar() {
             const doneCards = dayCards.filter(c => c.status === 'DONE');
             const otherCards = dayCards.filter(c => c.status !== 'DONE');
 
+            const tooltipPositionCls = 
+              (dayOfWeek === 0 || dayOfWeek === 1)
+                ? "left-0 translate-x-0 origin-bottom-left" 
+                : (dayOfWeek === 5 || dayOfWeek === 6)
+                  ? "right-0 left-auto translate-x-0 origin-bottom-right" 
+                  : "left-1/2 -translate-x-1/2";
+
+            const arrowPositionCls =
+              (dayOfWeek === 0 || dayOfWeek === 1)
+                ? "left-1.5"
+                : (dayOfWeek === 5 || dayOfWeek === 6)
+                  ? "right-1.5"
+                  : "left-1/2 -translate-x-1/2";
+
             return (
               <div 
                 key={`day-${i}`} 
                 onClick={() => !isLocked && handleDayClick(day)}
-                className={`flex flex-col rounded border p-1 sm:p-1 transition-colors relative min-h-[44px] ${isLocked ? 'cursor-not-allowed opacity-30 bg-gray-50' : 'cursor-pointer'} ${!isToday(day) && !isSelected && !isLocked ? weekColors[weekIndex % weekColors.length] : ''} ${isToday(day) ? 'ring-1 ring-indigo-500 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] bg-white' : isSelected ? 'bg-indigo-50 border-indigo-200 pointer-events-none' : 'border-transparent hover:!bg-white/50'}`}
+                className={`flex flex-col rounded border p-1 sm:p-1 transition-colors relative min-h-[44px] ${isLocked ? 'cursor-not-allowed opacity-30 bg-gray-50' : 'cursor-pointer'} ${!isToday(day) && !isSelected && !isLocked ? weekColors[weekIndex % weekColors.length] : ''} ${isToday(day) ? 'ring-1 ring-indigo-500 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] bg-white' : isSelected ? 'bg-indigo-50 border-indigo-200 pointer-events-none' : 'border-transparent hover:!bg-white/50'} hover:z-[60]`}
               >
                 <div className="flex justify-between items-start leading-none mb-0.5">
                   <span className={`text-[10px] font-bold ${isToday(day) ? 'text-indigo-600' : 'text-gray-600'}`}>{day}</span>
@@ -695,17 +718,23 @@ export default function Calendar() {
                             className="w-1.5 h-1.5 sm:w-2 sm:h-2 shrink-0 rounded-full group-hover/dot:scale-150 transition-transform ring-1 ring-black/10"
                             style={{ backgroundColor: card.color || '#0079bf' }}
                           />
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/dot:flex flex-col w-[max-content] max-w-[150px] p-2 bg-gray-900 border border-gray-700 text-white text-xs rounded shadow-xl z-50 pointer-events-none opacity-100">
-                            <p className="font-bold line-clamp-2">{card.title}</p>
-                            {card.description && <p className="text-gray-300 mt-1 line-clamp-3 text-[10px] whitespace-pre-wrap">{card.description}</p>}
+                          <div className={`absolute bottom-full mb-2 hidden group-hover/dot:flex flex-col w-[180px] sm:w-[220px] p-3 bg-slate-900/95 backdrop-blur-md border border-white/10 text-white text-xs rounded-xl shadow-2xl z-[9999] pointer-events-none opacity-100 border-l-4 ${tooltipPositionCls}`} style={{ borderLeftColor: card.color || '#0079bf' }}>
+                            <p className="font-extrabold text-white tracking-wide text-[11px] leading-tight line-clamp-2 uppercase">{card.title}</p>
+                            {card.description && (
+                              <p className="text-slate-300 mt-1.5 line-clamp-4 text-[10px] whitespace-pre-wrap leading-relaxed border-t border-white/5 pt-1.5">
+                                {card.description}
+                              </p>
+                            )}
+                            <div className={`absolute top-full w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-white/10 -mt-1 ${arrowPositionCls}`} />
                           </div>
                         </div>
                       ))}
                       {otherCards.length > 6 && (
                         <div className="flex items-center justify-center w-2 h-2 shrink-0 rounded-full ring-1 ring-gray-300 bg-white text-[6px] font-bold text-gray-500 py-0.5 mt-0.5 cursor-default group relative">
                           {otherCards.length - 5}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col w-[max-content] max-w-[150px] p-1.5 bg-gray-900 border border-gray-700 text-white text-xs rounded shadow-xl z-[9999] pointer-events-none opacity-100">
-                             Mais {otherCards.length - 5}
+                          <div className={`absolute bottom-full mb-2 hidden group-hover:flex flex-col w-[100px] p-2 bg-slate-900/95 backdrop-blur-md border border-white/10 text-white text-[10px] font-bold rounded-lg shadow-xl z-[9999] pointer-events-none opacity-100 text-center ${tooltipPositionCls}`}>
+                            Mais {otherCards.length - 5}
+                            <div className={`absolute top-full w-1.5 h-1.5 bg-slate-900 rotate-45 border-r border-b border-white/10 -mt-0.75 ${arrowPositionCls}`} />
                           </div>
                         </div>
                       )}
@@ -719,17 +748,23 @@ export default function Calendar() {
                               className="w-1.5 h-1.5 sm:w-2 sm:h-2 shrink-0 rounded-full group-hover/dot:scale-150 transition-transform ring-1 ring-black/20 opacity-30" 
                               style={{ backgroundColor: card.color || '#0079bf' }} 
                             />
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/dot:flex flex-col w-[max-content] max-w-[150px] p-2 bg-gray-900 border border-gray-700 text-white text-xs rounded shadow-xl z-[9999] pointer-events-none opacity-100">
-                              <p className="font-bold line-clamp-2 text-white">{card.title}</p>
-                              {card.description && <p className="text-gray-200 mt-1 line-clamp-3 text-[10px] whitespace-pre-wrap">{card.description}</p>}
+                            <div className={`absolute bottom-full mb-2 hidden group-hover/dot:flex flex-col w-[180px] sm:w-[220px] p-3 bg-slate-900/95 backdrop-blur-md border border-white/10 text-white text-xs rounded-xl shadow-2xl z-[9999] pointer-events-none opacity-100 border-l-4 ${tooltipPositionCls}`} style={{ borderLeftColor: card.color || '#0079bf' }}>
+                              <p className="font-extrabold text-slate-200 tracking-wide text-[11px] leading-tight line-clamp-2 uppercase line-through opacity-70">{card.title}</p>
+                              {card.description && (
+                                <p className="text-slate-400 mt-1.5 line-clamp-4 text-[10px] whitespace-pre-wrap leading-relaxed border-t border-white/5 pt-1.5 line-through opacity-60">
+                                  {card.description}
+                                </p>
+                              )}
+                              <div className={`absolute top-full w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-white/10 -mt-1 ${arrowPositionCls}`} />
                             </div>
                           </div>
                         ))}
                         {doneCards.length > 6 && (
                           <div className="flex items-center justify-center w-2 h-2 shrink-0 rounded-full ring-1 ring-gray-300 bg-white text-[6px] font-bold text-gray-500 py-0.5 mt-0.5 opacity-50 cursor-default group relative">
                             {doneCards.length - 5}
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col w-[max-content] max-w-[150px] p-1.5 bg-gray-900 border border-gray-700 text-white text-xs rounded shadow-xl z-[9999] pointer-events-none opacity-100">
-                               Mais {doneCards.length - 5}
+                            <div className={`absolute bottom-full mb-2 hidden group-hover:flex flex-col w-[100px] p-2 bg-slate-900/95 backdrop-blur-md border border-white/10 text-white text-[10px] font-bold rounded-lg shadow-xl z-[9999] pointer-events-none opacity-100 text-center ${tooltipPositionCls}`}>
+                              Mais {doneCards.length - 5}
+                              <div className={`absolute top-full w-1.5 h-1.5 bg-slate-900 rotate-45 border-r border-b border-white/10 -mt-0.75 ${arrowPositionCls}`} />
                             </div>
                           </div>
                         )}
@@ -809,7 +844,7 @@ export default function Calendar() {
       </div>
 
       {/* KANBAN MINI VIEW */}
-      <div className={`${getKanbanWidthCls()} bg-white rounded-xl shadow-sm border border-[#DFE1E6] p-4 md:p-6 flex flex-col gap-4 overflow-hidden transition-all duration-500 ease-in-out ${flipState === 'out' ? 'calendar-flip-out' : ''} ${flipState === 'in' ? 'calendar-flip-in' : ''}`}>
+      <div className={`${getKanbanWidthCls()} bg-white rounded-xl shadow-sm border border-[#DFE1E6] p-4 md:p-6 flex flex-col gap-4 overflow-hidden ${flipState === 'out' ? 'calendar-flip-out' : ''} ${flipState === 'in' ? 'calendar-flip-in' : ''}`}>
         <div className="flex items-center justify-between shrink-0">
           <h3 className="font-bold flex items-center gap-2">
             {kanbanView !== 'minimized' && <span className={`text-xl font-black tracking-tight ${selectedWeekTextColor}`}>Quadro do dia:</span>}
@@ -851,7 +886,7 @@ export default function Calendar() {
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={rectIntersection}
             onDragStart={onDragStart}
             onDragOver={onDragOver}
             onDragEnd={onDragEnd}
@@ -1127,30 +1162,39 @@ export default function Calendar() {
               </div>
 
               {/* SEÇÃO DE ATRIBUIÇÃO COMPARTILHADA (GRUPOS) */}
-              {!isPastDay && groupMembers.length > 0 && (
+              {!isPastDay && (
                 <div className="border-t pt-4">
                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Atribuir a Membro do Grupo</label>
-                  <div className="flex gap-2 items-center">
-                    <select
-                      value={assigneeId}
-                      onChange={e => setAssigneeId(e.target.value)}
-                      className="flex-1 border rounded-lg p-2 text-xs text-gray-700 bg-gray-50/50 focus:ring-2 focus:ring-[#0079bf] outline-none"
-                    >
-                      <option value="">Selecione um membro do grupo...</option>
-                      {groupMembers.map(m => (
-                        <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleAssignCard}
-                      disabled={assigningCard || !assigneeId}
-                      className="bg-[#0079bf] hover:bg-[#005c91] text-white text-xs font-bold py-2 px-3 rounded-lg shadow-sm transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
-                    >
-                      {assigningCard ? 'Enviando...' : 'Atribuir'}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1 leading-tight">Ao atribuir, a tarefa será enviada para a Caixa de Entrada do membro. Ela sairá da sua agenda caso ele aceite.</p>
+                  {groupMembers.length > 0 ? (
+                    <div className="flex gap-2 items-center">
+                      <select
+                        value={assigneeId}
+                        onChange={e => setAssigneeId(e.target.value)}
+                        className="flex-1 border rounded-lg p-2 text-xs text-gray-700 bg-gray-50/50 focus:ring-2 focus:ring-[#0079bf] outline-none"
+                      >
+                        <option value="">Selecione um membro do grupo...</option>
+                        {groupMembers.map(m => (
+                          <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleAssignCard}
+                        disabled={assigningCard || !assigneeId}
+                        className="bg-[#0079bf] hover:bg-[#005c91] text-white text-xs font-bold py-2 px-3 rounded-lg shadow-sm transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+                      >
+                        {assigningCard ? 'Enviando...' : 'Atribuir'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-amber-800 text-[11px] leading-relaxed">
+                      <p><strong>Nenhum colaborador encontrado:</strong> Para atribuir tarefas, certifique-se de que você e outros colaboradores pertencem ao mesmo grupo de rede interna.</p>
+                      <p className="mt-1 text-amber-700 font-semibold">💡 Se você for o administrador, crie um grupo e associe os membros no <strong>Painel Admin</strong>.</p>
+                    </div>
+                  )}
+                  {groupMembers.length > 0 && (
+                    <p className="text-[10px] text-gray-400 mt-1 leading-tight">Ao atribuir, a tarefa será enviada para a Caixa de Entrada do membro. Ela sairá da sua agenda caso ele aceite.</p>
+                  )}
                 </div>
               )}
 

@@ -1,0 +1,77 @@
+/**
+ * KalendAI — Sistema Centralizado de Temas CSS
+ * 
+ * ✅ Para mudar o tema de cor global da plataforma,
+ *    altere apenas as variáveis abaixo em :root {}
+ *    Nenhum outro arquivo precisa ser modificado.
+ * 
+ * Exemplo: troque --color-primary para '#7c3aed' (roxo)
+ * e toda a plataforma mudará instantaneamente.
+ */
+
+:root {
+  /* ── Cor Primária da Marca ───────────────────────────── */
+  /* O azul KalendAI original. Mude apenas este bloco.    */
+  --color-primary:        #0079bf;
+  --color-primary-hover:  #006aad;
+  --color-primary-light:  #dbeafe;
+  --color-primary-subtle: rgba(0, 121, 191, 0.08);
+  --color-primary-glow:   rgba(0, 121, 191, 0.20);
+
+  /* ── Cores Semânticas ───────────────────────────────── */
+  --color-success:        #16a34a;
+  --color-success-light:  #dcfce7;
+  --color-warning:        #d97706;
+  --color-warning-light:  #fef3c7;
+  --color-danger:         #dc2626;
+  --color-danger-light:   #fee2e2;
+  --color-info:           #0284c7;
+  --color-info-light:     #e0f2fe;
+
+  /* ── Escala de Neutros ──────────────────────────────── */
+  --color-bg-page:        #f8fafc;
+  --color-bg-card:        #ffffff;
+  --color-border:         #e2e8f0;
+  --color-border-light:   #f1f5f9;
+  --color-text-primary:   #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted:     #94a3b8;
+
+  /* ── Sidebar ───────────────────────────────────────── */
+  --sidebar-bg:           #1a2332;
+  --sidebar-text:         #cbd5e1;
+  --sidebar-text-muted:   #64748b;
+  --sidebar-hover:        rgba(255, 255, 255, 0.07);
+  --sidebar-active-bg:    rgba(0, 121, 191, 0.15);
+  --sidebar-active-text:  var(--color-primary);
+  --sidebar-border:       rgba(255, 255, 255, 0.06);
+
+  /* ── Relatórios — Badges de Versão ─────────────────── */
+  --report-v1-color:      #3b82f6;   /* Azul — V1 Manual IA */
+  --report-v1-bg:         #eff6ff;
+  --report-v2-color:      #6366f1;   /* Índigo — V2 Manual IA */
+  --report-v2-bg:         #eef2ff;
+  --report-v3-color:      #d97706;   /* Âmbar — V3 Automático */
+  --report-v3-bg:         #fffbeb;
+
+  /* ── Tipografia ─────────────────────────────────────── */
+  --font-family:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-base:       14px;
+  --font-size-sm:         12px;
+  --font-size-xs:         11px;
+
+  /* ── Bordas e Sombras ──────────────────────────────── */
+  --radius-sm:            6px;
+  --radius-md:            10px;
+  --radius-lg:            16px;
+  --radius-xl:            20px;
+  --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:            0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg:            0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-primary:       0 4px 14px var(--color-primary-glow);
+
+  /* ── Transições ─────────────────────────────────────── */
+  --transition-fast:      150ms ease;
+  --transition-base:      200ms ease;
+  --transition-slow:      300ms ease;
+}

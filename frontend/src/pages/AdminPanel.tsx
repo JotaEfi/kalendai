@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Plus, Mail, Lock, CheckCircle, AlertTriangle, Copy, Trash2, Shield } from 'lucide-react';
+import { Users, UserPlus, Plus, Mail, Lock, CheckCircle, AlertTriangle, Copy, Trash2, Shield, Edit } from 'lucide-react';
 import api from '../services/api';
 
 interface GroupMember {
@@ -20,6 +20,21 @@ interface UserGroup {
 export default function AdminPanel() {
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
+
+  // Users for group association management
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
+  // Inline editing state for users
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserRole, setEditUserRole] = useState('');
+  const [editUserGroupId, setEditUserGroupId] = useState('');
+
+  // Inline editing state for groups
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editGroupNameVal, setEditGroupNameVal] = useState('');
 
   // New Group Form State
   const [newGroupName, setNewGroupName] = useState('');
@@ -59,8 +74,110 @@ export default function AdminPanel() {
     }
   };
 
+  // Fetch all users in the system
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const res = await api.get('/admin/users');
+      setUsers(res.data);
+    } catch (err) {
+      console.error('Error fetching all users:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleUpdateUserGroup = async (userId: string, groupId: string) => {
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+      await api.put(`/admin/users/${userId}/group`, { groupId: groupId || null });
+      setSuccessMsg('Associação de grupo atualizada com sucesso!');
+      fetchGroups();
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.error || 'Erro ao associar colaborador ao grupo.');
+    }
+  };
+
+  const handleSaveGroupEdit = async (groupId: string) => {
+    if (!editGroupNameVal.trim()) return;
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+      await api.put(`/admin/groups/${groupId}`, { name: editGroupNameVal.trim() });
+      setSuccessMsg('Grupo renomeado com sucesso!');
+      setEditingGroupId(null);
+      fetchGroups();
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.error || 'Erro ao renomear grupo.');
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este grupo? Os membros dele serão mantidos, mas ficarão sem grupo.')) return;
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+      await api.delete(`/admin/groups/${groupId}`);
+      setSuccessMsg('Grupo excluído com sucesso!');
+      fetchGroups();
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.error || 'Erro ao excluir grupo.');
+    }
+  };
+
+  const handleStartUserEdit = (user: any) => {
+    setEditingUserId(user.id);
+    setEditUserName(user.name);
+    setEditUserEmail(user.email);
+    setEditUserRole(user.role);
+    setEditUserGroupId(user.groupId || '');
+  };
+
+  const handleSaveUserEdit = async (userId: string) => {
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+      await api.put(`/admin/users/${userId}`, {
+        name: editUserName,
+        email: editUserEmail,
+        role: editUserRole,
+        groupId: editUserGroupId || null
+      });
+      setSuccessMsg('Dados do colaborador atualizados com sucesso!');
+      setEditingUserId(null);
+      fetchGroups();
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.error || 'Erro ao atualizar dados do colaborador.');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir permanentemente este usuário do sistema? Esta ação é irreversível.')) return;
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+      await api.delete(`/admin/users/${userId}`);
+      setSuccessMsg('Usuário excluído com sucesso!');
+      fetchGroups();
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.error || 'Erro ao excluir colaborador.');
+    }
+  };
+
   useEffect(() => {
     fetchGroups();
+    fetchUsers();
   }, []);
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -74,6 +191,7 @@ export default function AdminPanel() {
       setSuccessMsg(`Grupo "${res.data.name}" criado com sucesso!`);
       setNewGroupName('');
       fetchGroups();
+      fetchUsers();
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.response?.data?.error || 'Erro ao criar grupo.');
@@ -130,6 +248,7 @@ export default function AdminPanel() {
         }
 
         fetchGroups();
+        fetchUsers();
       }
     } catch (err: any) {
       console.error(err);
@@ -340,13 +459,57 @@ export default function AdminPanel() {
           <div className="space-y-6">
             {groups.map(group => (
               <div key={group.id} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-bold text-base text-gray-800">{group.name}</span>
-                    <span className="text-[10px] text-gray-400 font-semibold uppercase">({group.users.length} membros)</span>
-                  </div>
-                  <span className="text-[10px] text-gray-400 font-bold">CRIADO EM {new Date(group.createdAt).toLocaleDateString('pt-BR')}</span>
-                </div>
+                 <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex justify-between items-center flex-wrap gap-4">
+                   <div className="flex items-center gap-4">
+                     {editingGroupId === group.id ? (
+                       <div className="flex gap-2 items-center" onClick={(e) => e.stopPropagation()}>
+                         <input 
+                           type="text" 
+                           value={editGroupNameVal} 
+                           onChange={e => setEditGroupNameVal(e.target.value)} 
+                           className="px-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:border-[#0079bf] bg-white font-semibold shadow-sm"
+                           required
+                         />
+                         <button 
+                           type="button" 
+                           onClick={() => handleSaveGroupEdit(group.id)} 
+                           className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+                         >
+                           Salvar
+                         </button>
+                         <button 
+                           type="button" 
+                           onClick={() => setEditingGroupId(null)} 
+                           className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10px] font-bold rounded-lg transition-colors cursor-pointer"
+                         >
+                           Cancelar
+                         </button>
+                       </div>
+                     ) : (
+                       <div className="flex items-center gap-3">
+                         <span className="font-bold text-base text-gray-800">{group.name}</span>
+                         <span className="text-[10px] text-gray-400 font-semibold uppercase">({group.users.length} membros)</span>
+                         <button 
+                           type="button" 
+                           onClick={() => { setEditingGroupId(group.id); setEditGroupNameVal(group.name); }} 
+                           className="p-1 text-gray-400 hover:text-[#0079bf] rounded transition-colors cursor-pointer" 
+                           title="Renomear Grupo"
+                         >
+                           <Edit size={14}/>
+                         </button>
+                         <button 
+                           type="button" 
+                           onClick={() => handleDeleteGroup(group.id)} 
+                           className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors cursor-pointer" 
+                           title="Excluir Grupo"
+                         >
+                           <Trash2 size={14}/>
+                         </button>
+                       </div>
+                     )}
+                   </div>
+                   <span className="text-[10px] text-gray-400 font-bold">CRIADO EM {new Date(group.createdAt).toLocaleDateString('pt-BR')}</span>
+                 </div>
                 
                 {group.users.length === 0 ? (
                   <p className="px-6 py-4 text-xs text-gray-400 italic">Nenhum usuário associado a este grupo ainda.</p>
@@ -382,6 +545,152 @@ export default function AdminPanel() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+      {/* SEÇÃO 4: GERENCIAMENTO DE COLABORADORES E CONTAS */}
+      <div className="bg-white rounded-2xl border border-[#DFE1E6] shadow-sm p-6 space-y-6">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+            <Users size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-gray-800">Gerenciamento Completo de Usuários</h3>
+            <p className="text-xs text-gray-400">Altere nome, e-mail, nível de acesso ou exclua contas de colaboradores de forma simples e direta</p>
+          </div>
+        </div>
+
+        {loadingUsers ? (
+          <div className="text-center py-8 text-gray-400 text-sm font-medium">Carregando lista de colaboradores...</div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 text-sm">Nenhum colaborador encontrado no sistema.</div>
+        ) : (
+          <div className="overflow-x-auto border border-gray-200 rounded-xl">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/50 border-b border-gray-150 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  <th className="px-6 py-3">Nome</th>
+                  <th className="px-6 py-3">E-mail</th>
+                  <th className="px-6 py-3">Nível</th>
+                  <th className="px-6 py-3">Grupo Associado</th>
+                  <th className="px-6 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                {users.map((u: any) => (
+                  <tr key={u.id} className="hover:bg-gray-50/30 transition-colors">
+                    <td className="px-6 py-3.5 font-semibold text-gray-800">
+                      {editingUserId === u.id ? (
+                        <input
+                          type="text"
+                          value={editUserName}
+                          onChange={e => setEditUserName(e.target.value)}
+                          className="px-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:border-[#0079bf] bg-white font-semibold shadow-sm w-full"
+                          required
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span>{u.name}</span>
+                          {u.email === 'admin@kalend.ai' && (
+                            <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Dono/Você</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-3.5 font-mono text-xs text-gray-500">
+                      {editingUserId === u.id ? (
+                        <input
+                          type="email"
+                          value={editUserEmail}
+                          onChange={e => setEditUserEmail(e.target.value)}
+                          className="px-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:border-[#0079bf] bg-white font-mono shadow-sm w-full"
+                          required
+                        />
+                      ) : (
+                        u.email
+                      )}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      {editingUserId === u.id ? (
+                        <select
+                          value={editUserRole}
+                          onChange={e => setEditUserRole(e.target.value)}
+                          className="border rounded-lg p-1.5 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-[#0079bf] outline-none font-semibold w-full"
+                        >
+                          <option value="USER">USER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+                      ) : (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                          u.role === 'ADMIN' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {u.role}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      {editingUserId === u.id ? (
+                        <select
+                          value={editUserGroupId}
+                          onChange={e => setEditUserGroupId(e.target.value)}
+                          className="border rounded-lg p-1.5 text-xs text-gray-700 bg-white focus:ring-2 focus:ring-[#0079bf] outline-none font-semibold w-full"
+                        >
+                          <option value="">Nenhum (Sem Grupo)</option>
+                          {groups.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs font-semibold text-gray-600">
+                          {u.group?.name || 'Nenhum (Sem Grupo)'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3.5 text-right">
+                      {editingUserId === u.id ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveUserEdit(u.id)}
+                            className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingUserId(null)}
+                            className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10px] font-bold rounded-lg transition-colors cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleStartUserEdit(u)}
+                            className="p-1 text-gray-400 hover:text-[#0079bf] rounded transition-colors cursor-pointer"
+                            title="Editar Usuário"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          {u.email !== 'admin@kalend.ai' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(u.id)}
+                              className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                              title="Excluir Usuário"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

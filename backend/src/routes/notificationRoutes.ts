@@ -122,7 +122,10 @@ router.put('/:id/accept', async (req: AuthRequest, res: any) => {
     const [updatedCard, updatedNotification] = await prisma.$transaction([
       prisma.kanbanCard.update({
         where: { id: cardId },
-        data: { userId } // Transfer ownership to the recipient!
+        data: { 
+          userId, // Transfer ownership to the recipient!
+          isPendingAssignment: false // Clear the pending/transitional flag!
+        }
       }),
       prisma.notification.update({
         where: { id },
@@ -175,7 +178,7 @@ router.put('/:id/refuse', async (req: AuthRequest, res: any) => {
     const cardTitle = card?.title || 'Tarefa sem título';
     const recipientName = recipient?.name || 'Um usuário';
 
-    // Execute in transaction: mark as REJECTED and notify original sender
+    // Execute in transaction: mark as REJECTED, clear pending assignment, and notify original sender
     const [updatedNotification] = await prisma.$transaction([
       prisma.notification.update({
         where: { id },
@@ -191,6 +194,10 @@ router.put('/:id/refuse', async (req: AuthRequest, res: any) => {
           status: 'ACCEPTED', // Simple alert notification
           read: false
         }
+      }),
+      prisma.kanbanCard.update({
+        where: { id: cardId },
+        data: { isPendingAssignment: false } // Re-enable task visibility for the sender!
       })
     ]);
 

@@ -147,4 +147,163 @@ router.post('/users/invite', async (req: AuthRequest, res: any) => {
   }
 });
 
+// GET /users - List all users in the system (for group management)
+router.get('/users', async (req: AuthRequest, res: any) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        groupId: true,
+        group: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching all users:', error);
+    res.status(500).json({ error: 'Erro ao listar usuários', code: 'SERVER_ERROR' });
+  }
+});
+
+// PUT /users/:id/group - Associate a user to a group (or remove them by setting groupId to null)
+router.put('/users/:id/group', async (req: AuthRequest, res: any) => {
+  try {
+    const { id } = req.params;
+    const { groupId } = req.body; // can be string or null
+
+    if (groupId) {
+      // Verify group exists
+      const group = await prisma.userGroup.findUnique({ where: { id: groupId } });
+      if (!group) {
+        return res.status(404).json({ error: 'Grupo não encontrado', code: 'GROUP_NOT_FOUND' });
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { groupId: groupId || null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        groupId: true
+      }
+    });
+
+    res.json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error('Error updating user group:', error);
+    res.status(500).json({ error: 'Erro ao atualizar grupo do usuário', code: 'SERVER_ERROR' });
+  }
+});
+
+// PUT /users/:id - Update any user's profile completely (Name, Email, Role, Group)
+router.put('/users/:id', async (req: AuthRequest, res: any) => {
+  try {
+    const { id } = req.params;
+    const { name, email, role, groupId } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Nome e e-mail são obrigatórios', code: 'MISSING_FIELDS' });
+    }
+
+    // Verify email uniqueness if changed
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser && existingUser.id !== id) {
+      return res.status(400).json({ error: 'Este e-mail já está cadastrado para outro usuário.', code: 'EMAIL_ALREADY_EXISTS' });
+    }
+
+    if (groupId) {
+      // Verify group exists
+      const group = await prisma.userGroup.findUnique({ where: { id: groupId } });
+      if (!group) {
+        return res.status(404).json({ error: 'Grupo não encontrado', code: 'GROUP_NOT_FOUND' });
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        name: name.trim(),
+        email: email.trim(),
+        role: role === 'ADMIN' ? 'ADMIN' : 'USER',
+        groupId: groupId || null
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        groupId: true
+      }
+    });
+
+    res.json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error('Error updating user completely:', error);
+    res.status(500).json({ error: 'Erro ao atualizar dados do colaborador', code: 'SERVER_ERROR' });
+  }
+});
+
+// DELETE /users/:id - Delete a user from the system
+router.delete('/users/:id', async (req: AuthRequest, res: any) => {
+  try {
+    const { id } = req.params;
+    
+    // Prevent self deletion
+    if (req.user?.userId === id) {
+      return res.status(400).json({ error: 'Você não pode excluir sua própria conta de administrador.', code: 'CANNOT_DELETE_SELF' });
+    }
+
+    await prisma.user.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Erro ao excluir colaborador', code: 'SERVER_ERROR' });
+  }
+});
+
+// PUT /groups/:id - Update group name
+router.put('/groups/:id', async (req: AuthRequest, res: any) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'O nome do grupo é obrigatório', code: 'MISSING_GROUP_NAME' });
+    }
+
+    const updatedGroup = await prisma.userGroup.update({
+      where: { id },
+      data: { name: name.trim() }
+    });
+
+    res.json({ success: true, group: updatedGroup });
+  } catch (error) {
+    console.error('Error updating group:', error);
+    res.status(500).json({ error: 'Erro ao atualizar grupo', code: 'SERVER_ERROR' });
+  }
+});
+
+// DELETE /groups/:id - Delete a group (dissociates members cleanly via SetNull)
+router.delete('/groups/:id', async (req: AuthRequest, res: any) => {
+  try {
+    const { id } = req.params;
+    await prisma.userGroup.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting group:', error);
+    res.status(500).json({ error: 'Erro ao excluir grupo', code: 'SERVER_ERROR' });
+  }
+});
+
 export default router;

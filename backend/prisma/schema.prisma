@@ -48,6 +48,7 @@ model KanbanCard {
   isRolledOver    Boolean      @default(false) // true se veio de um dia anterior
   isSnapshot      Boolean      @default(false) // true se for o registro "congelado" de um dia passado
   originalDayDate DateTime?    // dia em que foi originalmente criado (antes de rollovers)
+  isPendingAssignment Boolean  @default(false) // true se a tarefa estiver transitando (enviada e aguardando aceite)
 
   images      CardImage[]
 
@@ -83,16 +84,23 @@ model Event {
 }
 
 model DailyReport {
-  id          String                       @id @default(uuid())
+  id          String     @id @default(uuid())
   userId      String
-  user        User                         @relation(fields: [userId], references: [id])
-  date        DateTime                     // data do relatório (apenas o dia)
-  content     String                       // texto gerado pela IA
-  isAutomatic Boolean                      @default(false)
-  generatedAt DateTime                     @default(now())
-  embedding   String?                      // temporary for sqlite
+  user        User       @relation(fields: [userId], references: [id])
+  date        DateTime   // data do relatório (apenas o dia)
+  content     String     // texto gerado pela IA ou automaticamente
+  version     Int        @default(1)          // 1 = V1 (1º IA manual), 2 = V2 (2º IA manual), 3 = V3 (automático 23:59)
+  reportType  ReportType @default(AI_MANUAL)  // tipo do relatório
+  isAutomatic Boolean    @default(false)
+  generatedAt DateTime   @default(now())
+  embedding   String?    // temporary for sqlite / pgvector
 
-  @@unique([userId, date])
+  @@unique([userId, date, version])
+}
+
+enum ReportType {
+  AI_MANUAL   // gerado manualmente pelo usuário via botão (máximo 2 por dia)
+  AUTOMATIC   // gerado automaticamente às 23:59 pelo sistema
 }
 
 model RefreshToken {

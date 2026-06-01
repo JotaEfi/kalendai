@@ -49,13 +49,12 @@ router.get('/report', async (req: AuthRequest, res: any) => {
 
     const dayDate = new Date(dateStr);
     
-    const report = await prisma.dailyReport.findUnique({
+    const report = await prisma.dailyReport.findFirst({
       where: {
-        userId_date: {
-          userId,
-          date: dayDate
-        }
-      }
+        userId,
+        date: dayDate
+      },
+      orderBy: { version: 'desc' }
     });
 
     if (report) {
@@ -92,7 +91,8 @@ router.post('/report', async (req: AuthRequest, res: any) => {
     const dayCards = await prisma.kanbanCard.findMany({
       where: {
         userId,
-        dayDate
+        dayDate,
+        isPendingAssignment: false
       },
       include: {
         images: true
@@ -103,9 +103,9 @@ router.post('/report', async (req: AuthRequest, res: any) => {
       const emptyText = "Nenhuma tarefa registrada para este dia. Aproveite o dia livre!\n\nRelatório de Atividades:";
       
       const savedReport = await prisma.dailyReport.upsert({
-        where: { userId_date: { userId, date: dayDate } },
+        where: { userId_date_version: { userId, date: dayDate, version: 1 } },
         update: { content: emptyText, isAutomatic: false },
-        create: { userId, date: dayDate, content: emptyText, isAutomatic: false }
+        create: { userId, date: dayDate, content: emptyText, isAutomatic: false, version: 1, reportType: 'AI_MANUAL' }
       });
 
       return res.json({ result: savedReport.content });
@@ -165,12 +165,13 @@ ${payload}`;
 
     const finalReport = `Relatório de Atividades ${formattedDate}:\n\n${generatedText}`;
 
-    // Upsert the daily report in database
+    // Upsert the daily report in database (V1 slot for legacy kanban route)
     const savedReport = await prisma.dailyReport.upsert({
       where: {
-        userId_date: {
+        userId_date_version: {
           userId,
-          date: dayDate
+          date: dayDate,
+          version: 1
         }
       },
       update: {
@@ -181,7 +182,9 @@ ${payload}`;
         userId,
         date: dayDate,
         content: finalReport,
-        isAutomatic: false
+        isAutomatic: false,
+        version: 1,
+        reportType: 'AI_MANUAL'
       }
     });
 
@@ -192,23 +195,17 @@ ${payload}`;
   }
 });
 
-// GET all cards for a specific day and user
+// GET all active (open / in-progress) cards for a user
 router.get('/pending', async (req: AuthRequest, res: any) => {
   try {
     const userId = req.user?.userId || 'placeholder-user-id';
     
-    // Find all OPEN and IN_PROGRESS cards for the current day
-    const today = new Date();
-    const offset = today.getTimezoneOffset() * 60000;
-    const localNow = new Date(today.getTime() - offset);
-    const todayDate = new Date(localNow);
-    todayDate.setUTCHours(0, 0, 0, 0);
-
     const cards = await prisma.kanbanCard.findMany({
       where: {
         userId,
-        dayDate: todayDate,
-        isSnapshot: false // filter out snapshots just in case
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+        isSnapshot: false,
+        isPendingAssignment: false
       },
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
     });
@@ -234,6 +231,7 @@ router.get('/month/:year/:month', async (req: AuthRequest, res: any) => {
           gte: startDate,
           lte: endDate,
         },
+        isPendingAssignment: false
       },
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
     });
@@ -258,7 +256,8 @@ router.get('/:date', async (req: AuthRequest, res: any) => {
     const cards = await prisma.kanbanCard.findMany({
       where: {
         userId,
-        dayDate
+        dayDate,
+        isPendingAssignment: false
       },
       include: {
         images: true
@@ -632,19 +631,25 @@ router.post('/:id/assign', async (req: AuthRequest, res: any) => {
       return res.status(400).json({ error: 'Já existe uma atribuição pendente para este usuário neste cartão.', code: 'ALREADY_PENDING' });
     }
 
-    // 4. Create the assignment notification in the recipient's Inbox
-    const notification = await prisma.notification.create({
-      data: {
-        userId: receiverId,
-        type: 'CARD_ASSIGNMENT',
-        title: 'Nova Tarefa Atribuída',
-        message: `O usuário "${senderUser.name}" gostaria de te atribuir a tarefa: "${card.title}".`,
-        cardId: id,
-        senderId,
-        status: 'PENDING',
-        read: false
-      }
-    });
+    // 4. Create the assignment notification in the recipient's Inbox AND set card as pending assignment (flying card state)
+    const [notification] = await prisma.$transaction([
+      prisma.notification.create({
+        data: {
+          userId: receiverId,
+          type: 'CARD_ASSIGNMENT',
+          title: 'Nova Tarefa Atribuída',
+          message: `O usuário "${senderUser.name}" gostaria de te atribuir a tarefa: "${card.title}".`,
+          cardId: id,
+          senderId,
+          status: 'PENDING',
+          read: false
+        }
+      }),
+      prisma.kanbanCard.update({
+        where: { id },
+        data: { isPendingAssignment: true }
+      })
+    ]);
 
     res.json({ success: true, notification });
   } catch (error: any) {

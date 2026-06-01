@@ -1,4 +1,8 @@
+/* KalendAI — Global Theme Variables (mude cores em src/styles/theme.css) */
+@import "./styles/theme.css";
+
 @import "tailwindcss";
+
 
 @keyframes shake {
   0% { transform: rotate(0deg); }

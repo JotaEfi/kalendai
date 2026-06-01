@@ -50,8 +50,8 @@ router.get('/', async (req: AuthRequest, res: any) => {
 
       for (const card of completedCards) {
         if (card.completedAt) {
-          // Fallback to createdAt if originalDayDate is not specified
-          const startTime = card.originalDayDate ? new Date(card.originalDayDate).getTime() : new Date(card.createdAt).getTime();
+          // Use the exact creation timestamp for accurate duration calculation
+          const startTime = new Date(card.createdAt).getTime();
           const endTime = new Date(card.completedAt).getTime();
           const elapsed = endTime - startTime;
 
@@ -89,12 +89,35 @@ router.get('/', async (req: AuthRequest, res: any) => {
       }
     }
 
-    // Metric 6: Last 5 reports
-    const latestReports = await prisma.dailyReport.findMany({
-      where: { userId },
-      orderBy: { date: 'desc' },
-      take: 5,
+    // Metric 6: All reports for the month, grouped by date for mini-calendar
+    const monthReports = await prisma.dailyReport.findMany({
+      where: {
+        userId,
+        date: { gte: startDate, lt: endDate }
+      },
+      orderBy: [{ date: 'desc' }, { version: 'asc' }],
     });
+
+    // Group reports by date string
+    const reportsByDateMap: Record<string, any[]> = {};
+    for (const r of monthReports) {
+      const dateStr = r.date.toISOString().split('T')[0];
+      if (!reportsByDateMap[dateStr]) reportsByDateMap[dateStr] = [];
+      reportsByDateMap[dateStr].push({
+        id: r.id,
+        version: (r as any).version || 1,
+        reportType: (r as any).reportType || 'AI_MANUAL',
+        isAutomatic: r.isAutomatic,
+        generatedAt: r.generatedAt,
+        contentPreview: r.content.substring(0, 120) + (r.content.length > 120 ? '...' : ''),
+        content: r.content,
+      });
+    }
+
+    const reportsByDate = Object.entries(reportsByDateMap).map(([date, reports]) => ({
+      date,
+      reports
+    })).sort((a, b) => b.date.localeCompare(a.date));
 
     res.json({
       month: monthStr,
@@ -109,14 +132,7 @@ router.get('/', async (req: AuthRequest, res: any) => {
         Criadas: w.criadas,
         Concluídas: w.concluidas,
       })),
-      latestReports: latestReports.map((r) => ({
-        id: r.id,
-        date: r.date.toISOString().split('T')[0],
-        isAutomatic: r.isAutomatic,
-        generatedAt: r.generatedAt,
-        contentPreview: r.content.substring(0, 100) + '...',
-        content: r.content,
-      })),
+      reportsByDate,
     });
   } catch (error: any) {
     console.error('Error compiling dashboard metrics:', error);

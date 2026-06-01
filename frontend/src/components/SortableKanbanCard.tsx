@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Pen, ChevronLeft, ChevronRight, Paperclip, X } from 'lucide-react';
+import { Pen, Paperclip, X } from 'lucide-react';
 
 export function KanbanCardUI({ card, isPastDay, handleOpenEditModal, formatDuration, dragRef, style, attributes, listeners, isDragging, handleMoveCardStatus }: any) {
   const isDone = card.status === 'DONE';
@@ -14,40 +14,8 @@ export function KanbanCardUI({ card, isPastDay, handleOpenEditModal, formatDurat
      hasAttachments = card.attachments && JSON.parse(card.attachments).length > 0;
   } catch(e) {}
 
-  const moveLeft = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isProgress && handleMoveCardStatus) handleMoveCardStatus(card.id, 'OPEN');
-    if (isDone && handleMoveCardStatus) handleMoveCardStatus(card.id, 'IN_PROGRESS');
-  };
-
-  const moveRight = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isOpen && handleMoveCardStatus) handleMoveCardStatus(card.id, 'IN_PROGRESS');
-    if (isProgress && handleMoveCardStatus) handleMoveCardStatus(card.id, 'DONE');
-  };
-
   return (
     <div className="relative group">
-      {!isPastDay && !isOpen && (
-        <button 
-          onClick={moveLeft}
-          title="Mover para a esquerda"
-          className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-gray-200 rounded-full shadow-md z-20 flex items-center justify-center text-gray-500 hover:text-[#0079bf] hover:scale-110 opacity-0 group-hover:opacity-100 transition-all focus:outline-none focus:opacity-100"
-        >
-          <ChevronLeft size={14} />
-        </button>
-      )}
-      
-      {!isPastDay && !isDone && (
-        <button 
-          onClick={moveRight}
-          title="Mover para a direita"
-          className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-gray-200 rounded-full shadow-md z-20 flex items-center justify-center text-gray-500 hover:text-[#0079bf] hover:scale-110 opacity-0 group-hover:opacity-100 transition-all focus:outline-none focus:opacity-100"
-        >
-          <ChevronRight size={14} />
-        </button>
-      )}
-
       <div
         ref={dragRef}
         style={{ borderColor: card.color, ...style }}

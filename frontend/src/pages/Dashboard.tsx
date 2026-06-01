@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
-import { 
-  BarChart3, 
-  CheckCircle2, 
-  Clock, 
-  PlusCircle, 
-  Percent, 
-  ChevronLeft, 
-  ChevronRight, 
-  Calendar, 
-  FileText, 
-  Eye, 
-  X, 
+import ReportCalendar from '../components/ReportCalendar';
+import {
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  PlusCircle,
+  Percent,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  X,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 
 interface DashboardMetrics {
@@ -29,34 +29,53 @@ interface WeeklyData {
   Concluídas: number;
 }
 
-interface ReportData {
+interface ReportItem {
   id: string;
-  date: string;
+  version: number;
+  reportType: string;
   isAutomatic: boolean;
   generatedAt: string;
   contentPreview: string;
   content: string;
 }
 
+interface ReportsByDateEntry {
+  date: string;
+  reports: ReportItem[];
+}
+
 interface DashboardResponse {
   month: string;
   metrics: DashboardMetrics;
   weeklyChart: WeeklyData[];
-  latestReports: ReportData[];
+  reportsByDate: ReportsByDateEntry[];
+}
+
+interface SelectedReportState {
+  report: ReportItem;
+  date: string;
+}
+
+function getVersionLabel(version: number, reportType: string) {
+  if (version === 3 || reportType === 'AUTOMATIC') return { label: 'V3 — Automático (23:59)', color: 'var(--report-v3-color)', bg: 'var(--report-v3-bg)' };
+  if (version === 2) return { label: 'V2 — Relatório IA Manual', color: 'var(--report-v2-color)', bg: 'var(--report-v2-bg)' };
+  return { label: 'V1 — Relatório IA Manual', color: 'var(--report-v1-color)', bg: 'var(--report-v1-bg)' };
 }
 
 export default function Dashboard() {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
-    return d.toISOString().slice(0, 7); // e.g. YYYY-MM
+    return d.toISOString().slice(0, 7);
   });
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedReport, setSelectedReport] = useState<ReportData | null>(null);
+  const [selectedState, setSelectedState] = useState<SelectedReportState | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const fetchDashboardData = async (month: string) => {
+  const fetchDashboardData = useCallback(async (month: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -68,11 +87,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboardData(currentMonth);
-  }, [currentMonth]);
+  }, [currentMonth, fetchDashboardData]);
 
   const handlePrevMonth = () => {
     const [year, month] = currentMonth.split('-').map(Number);
@@ -90,6 +109,22 @@ export default function Dashboard() {
     const [year, month] = monthStr.split('-').map(Number);
     const date = new Date(year, month - 1, 1);
     return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const handleGenerateReport = async (date: string) => {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      await api.post(`/reports/generate/${date}`);
+      // Refresh dashboard data to show new report badge
+      await fetchDashboardData(currentMonth);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Erro ao gerar relatório.';
+      setGenerateError(msg);
+      setTimeout(() => setGenerateError(null), 5000);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   // Helper to compute maximum weekly value for graph scaling
@@ -112,7 +147,7 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 flex items-center gap-2">
-            <BarChart3 className="text-[#0079bf] w-8 h-8" />
+            <BarChart3 style={{ color: 'var(--color-primary)' }} className="w-8 h-8" />
             Dashboard Mensal
           </h1>
           <p className="text-sm text-slate-500 mt-1">Monitore sua produtividade diária, metas e relatórios resumidos.</p>
@@ -122,7 +157,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 self-start sm:self-center bg-white p-1 rounded-xl shadow-sm border border-slate-200">
           <button 
             onClick={handlePrevMonth}
-            className="p-2 text-slate-600 hover:text-[#0079bf] hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-600 hover:text-[var(--color-primary)] hover:bg-slate-100 rounded-lg transition-colors"
             title="Mês Anterior"
           >
             <ChevronLeft size={20} />
@@ -140,7 +175,7 @@ export default function Dashboard() {
 
           <button 
             onClick={handleNextMonth}
-            className="p-2 text-slate-600 hover:text-[#0079bf] hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-600 hover:text-[var(--color-primary)] hover:bg-slate-100 rounded-lg transition-colors"
             title="Próximo Mês"
           >
             <ChevronRight size={20} />
@@ -148,9 +183,17 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Generate Error Banner */}
+      {generateError && (
+        <div className="mb-4 bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl flex items-center gap-2 text-sm animate-fade-in">
+          <AlertCircle size={16} className="shrink-0" />
+          {generateError}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex flex-col items-center justify-center flex-1 h-[400px]">
-          <div className="w-10 h-10 border-4 border-[#0079bf]/30 border-t-[#0079bf] rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-4 border-[var(--color-primary)]/30 border-t-[var(--color-primary)] rounded-full animate-spin"></div>
           <p className="text-slate-500 text-sm mt-4">Compilando métricas das tarefas...</p>
         </div>
       ) : error ? (
@@ -221,7 +264,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Main Visual Panels: Graph left, Last Reports right */}
+          {/* Main Visual Panels: Graph left, Report Calendar right */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
             
             {/* Custom interactive bars chart panel */}
@@ -235,56 +278,87 @@ export default function Dashboard() {
               </div>
 
               {/* Graphical Canvas Render */}
-              <div className="mt-8 flex flex-col justify-end h-[240px] w-full">
-                {/* Visual horizontal y-axis grids container */}
-                <div className="flex-1 flex flex-col justify-between relative border-l border-b border-slate-200 pb-2 pl-3">
+              <div className="mt-8 flex items-stretch h-[240px] w-full">
+                
+                {/* Y-axis numbers */}
+                <div className="flex flex-col justify-between text-[10px] font-bold text-slate-400 h-[190px] pr-3 text-right w-10 select-none pb-2 mt-1">
+                  <span>{maxWeeklyVal}</span>
+                  <span>{Math.round(maxWeeklyVal * 0.75)}</span>
+                  <span>{Math.round(maxWeeklyVal * 0.50)}</span>
+                  <span>{Math.round(maxWeeklyVal * 0.25)}</span>
+                  <span>0</span>
+                </div>
+
+                {/* Canvas Area */}
+                <div className="flex-1 flex flex-col justify-between relative border-l border-b border-slate-200 pb-2 pl-3 h-[190px]">
                   
-                  {/* Map bars side-by-side */}
-                  <div className="absolute inset-0 flex justify-around items-end pt-3 z-10 px-2">
+                  {/* Grid Lines */}
+                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none z-0 pr-2 pb-2">
+                    <div className="w-full border-t border-slate-100/70" />
+                    <div className="w-full border-t border-slate-100/70" />
+                    <div className="w-full border-t border-slate-100/70" />
+                    <div className="w-full border-t border-slate-100/70" />
+                    <div className="w-full" />
+                  </div>
+
+                  {/* Columns */}
+                  <div className="absolute inset-0 flex justify-around items-end z-10 px-2 pb-2">
                     {data.weeklyChart.map((week, idx) => {
                       const createdPercentage = (week.Criadas / maxWeeklyVal) * 100;
                       const completedPercentage = (week.Concluídas / maxWeeklyVal) * 100;
 
                       return (
-                        <div key={idx} className="flex flex-col items-center gap-1 group/bar w-[18%]">
-                          <div className="flex items-end gap-2 w-full justify-center h-[180px]">
-                            
-                            {/* Criadas column (Blue) */}
-                            <div className="relative flex justify-center w-5 sm:w-7 group/tip">
-                              <div 
-                                style={{ height: `${Math.max(createdPercentage, 4)}%` }}
-                                className="w-full bg-[#0079bf]/80 hover:bg-[#0079bf] transition-all duration-500 rounded-t-md cursor-pointer shadow-sm shadow-[#0079bf]/20"
-                              />
-                              {/* Tooltip */}
-                              <span className="hidden group-hover/bar:block absolute -top-8 bg-slate-800 text-white text-[10px] font-bold py-1 px-2 rounded-md shadow-lg z-20 whitespace-nowrap leading-none">
-                                {week.Criadas} Criadas
+                        <div key={idx} className="flex flex-col items-center gap-1 group/bar w-[18%] relative h-full justify-end">
+                          
+                          {/* Backdrop highlight on week hover */}
+                          <div className="absolute inset-x-0 -inset-y-1 bg-slate-50/0 group-hover/bar:bg-slate-50/70 rounded-2xl transition-all duration-300 z-0 pointer-events-none border border-transparent group-hover/bar:border-slate-100/80" />
+
+                          {/* Unified premium tooltip */}
+                          <div className="absolute -top-24 left-1/2 -translate-x-1/2 hidden group-hover/bar:flex flex-col bg-slate-950 text-white text-[11px] p-2.5 rounded-xl shadow-xl z-30 pointer-events-none min-w-[125px] border border-slate-850/80 backdrop-blur-md transition-all">
+                            <div className="font-bold text-[10px] text-slate-400 border-b border-slate-800 pb-1 mb-1.5 uppercase tracking-wider text-center">{week.name}</div>
+                            <div className="flex justify-between items-center gap-4 py-0.5">
+                              <span className="text-slate-400 font-medium">Criadas:</span>
+                              <span className="font-bold text-sky-400">{week.Criadas}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 py-0.5">
+                              <span className="text-slate-400 font-medium">Concluídas:</span>
+                              <span className="font-bold text-emerald-400">{week.Concluídas}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 mt-1.5 border-t border-slate-800 pt-1">
+                              <span className="text-slate-400 font-medium text-[9px]">Aproveitamento:</span>
+                              <span className="font-extrabold text-amber-400 text-[10px]">
+                                {week.Criadas > 0 ? Math.round((week.Concluídas / week.Criadas) * 100) : 0}%
                               </span>
                             </div>
+                          </div>
 
-                            {/* Concluidas column (Green) */}
-                            <div className="relative flex justify-center w-5 sm:w-7">
+                          {/* The two columns */}
+                          <div className="flex items-end gap-2 w-full justify-center h-[140px] z-10">
+                            
+                            {/* Criadas column (Blue Gradient) */}
+                            <div className="relative flex justify-center w-5 sm:w-7 h-full items-end">
+                              <div 
+                                style={{ height: `${Math.max(createdPercentage, 4)}%` }}
+                                className="w-full bg-gradient-to-t from-blue-600 to-sky-400 hover:from-blue-700 hover:to-sky-500 transition-all duration-300 rounded-t-md cursor-pointer shadow-sm shadow-blue-500/10 hover:shadow-md hover:shadow-blue-500/20"
+                              />
+                            </div>
+
+                            {/* Concluídas column (Green Gradient) */}
+                            <div className="relative flex justify-center w-5 sm:w-7 h-full items-end">
                               <div 
                                 style={{ height: `${Math.max(completedPercentage, 4)}%` }}
-                                className="w-full bg-emerald-500/80 hover:bg-emerald-500 transition-all duration-500 rounded-t-md cursor-pointer shadow-sm shadow-emerald-500/20"
+                                className="w-full bg-gradient-to-t from-emerald-600 to-teal-400 hover:from-emerald-700 hover:to-teal-500 transition-all duration-300 rounded-t-md cursor-pointer shadow-sm shadow-emerald-500/10 hover:shadow-md hover:shadow-emerald-500/20"
                               />
-                              {/* Tooltip */}
-                              <span className="hidden group-hover/bar:block absolute -top-12 bg-slate-800 text-white text-[10px] font-bold py-1 px-2 rounded-md shadow-lg z-20 whitespace-nowrap leading-none">
-                                {week.Concluídas} Concluídas
-                              </span>
                             </div>
 
                           </div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-2">{week.name}</span>
+                          
+                          {/* Week name label */}
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-2 z-10">{week.name}</span>
                         </div>
                       );
                     })}
                   </div>
-
-                  {/* Horizontal grid guide lines */}
-                  <div className="w-full border-t border-slate-100 opacity-50 h-0" />
-                  <div className="w-full border-t border-slate-100 opacity-50 h-0" />
-                  <div className="w-full border-t border-slate-100 opacity-50 h-0" />
-                  <div className="w-full border-t border-slate-100 opacity-50 h-0" />
 
                 </div>
               </div>
@@ -292,64 +366,32 @@ export default function Dashboard() {
               {/* Color legend guide indicator */}
               <div className="flex justify-center gap-6 mt-6 pt-4 border-t border-slate-100">
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-[#0079bf] rounded-md shadow" />
+                  <div className="w-3.5 h-3.5 bg-gradient-to-t from-blue-600 to-sky-400 rounded-md shadow" />
                   <span className="text-[11px] font-bold text-slate-600">Tarefas Criadas</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-emerald-500 rounded-md shadow" />
+                  <div className="w-3.5 h-3.5 bg-gradient-to-t from-emerald-600 to-teal-400 rounded-md shadow" />
                   <span className="text-[11px] font-bold text-slate-600">Tarefas Concluídas</span>
                 </div>
               </div>
 
             </div>
 
-            {/* Reports index block pane */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-5 flex flex-col justify-between">
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                  <FileText size={18} className="text-slate-500" />
-                  Histórico de Relatórios AI
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5 font-medium">Os últimos 5 sumários gerados do seu Kanban.</p>
-              </div>
-
-              <div className="mt-6 flex-1 flex flex-col gap-3 overflow-y-auto max-h-[250px] pr-1 scrollbar-thin">
-                {data.latestReports.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    <Calendar className="text-slate-300 w-10 h-10 mb-2" />
-                    <p className="text-slate-500 text-xs">Nenhum relatório AI gravado recentemente.</p>
-                  </div>
-                ) : (
-                  data.latestReports.map((report) => {
-                    const parsedDate = new Date(report.date + 'T00:00:00');
-                    return (
-                      <div 
-                        key={report.id} 
-                        className="p-3 border border-slate-150 rounded-xl bg-slate-50 hover:bg-slate-100/50 hover:border-[#0079bf]/30 transition-all duration-200 flex justify-between items-center group/item"
-                      >
-                        <div className="min-w-0 pr-3">
-                          <h4 className="font-bold text-slate-700 text-xs truncate capitalize">
-                            {parsedDate.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
-                          </h4>
-                          <p className="text-[10px] text-slate-400 mt-0.5 truncate">{report.contentPreview}</p>
-                        </div>
-                        <button 
-                          onClick={() => setSelectedReport(report)}
-                          className="p-2 bg-white border border-slate-200 hover:border-[#0079bf] text-slate-600 hover:text-[#0079bf] rounded-xl shadow-xs transition-all duration-200 group-hover/item:scale-105 shrink-0"
-                          title="Visualizar Relatório"
-                        >
-                          <Eye size={14} />
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                <span>Atualizado recentemente</span>
-                <span>UTC</span>
-              </div>
+            {/* Report Mini-Calendar panel */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-5 flex flex-col">
+              {generating && (
+                <div className="mb-3 flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                  <Loader2 size={13} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+                  Gerando relatório com IA...
+                </div>
+              )}
+              <ReportCalendar
+                reportsByDate={data.reportsByDate || []}
+                currentMonth={currentMonth}
+                onMonthChange={setCurrentMonth}
+                onSelectReport={(report, date) => setSelectedState({ report, date })}
+                onGenerateReport={handleGenerateReport}
+              />
             </div>
 
           </div>
@@ -357,31 +399,48 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* LIGHTBOX MODAL DIALOG POP-UP: Visualizer for any selected report */}
-      {selectedReport && (
+      {/* REPORT VIEWER MODAL */}
+      {selectedState && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
-          onClick={() => setSelectedReport(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setSelectedState(null)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-2xl w-full h-[85vh] max-h-[600px] shadow-2xl flex flex-col overflow-hidden animate-zoom-in"
+            className="bg-white rounded-3xl max-w-2xl w-full h-[85vh] max-h-[600px] shadow-2xl flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div className="bg-slate-50 p-5 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <FileText className="text-[#0079bf]" size={20} />
+                <FileText style={{ color: 'var(--color-primary)' }} size={20} />
                 <div>
-                  <h3 className="font-extrabold text-slate-800 capitalize text-sm">
-                    Relatório do Dia — {new Date(selectedReport.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                  </h3>
-                  <p className="text-[10px] text-slate-500 font-medium">IA {selectedReport.isAutomatic ? 'Automática' : 'Manual'} • Gerado em {new Date(selectedReport.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-slate-800 capitalize text-sm">
+                      {new Date(selectedState.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </h3>
+                    {(() => {
+                      const vl = getVersionLabel(selectedState.report.version, selectedState.report.reportType);
+                      return (
+                        <span
+                          style={{ background: vl.bg, color: vl.color }}
+                          className="text-[10px] font-extrabold rounded-md px-1.5 py-0.5"
+                        >
+                          V{selectedState.report.version}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {getVersionLabel(selectedState.report.version, selectedState.report.reportType).label}
+                    {' • '}
+                    Gerado às {new Date(selectedState.report.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               </div>
               
               {/* Close Button */}
               <button 
-                onClick={() => setSelectedReport(null)}
+                onClick={() => setSelectedState(null)}
                 className="p-2 hover:bg-slate-200/50 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
               >
                 <X size={18} />
@@ -391,7 +450,7 @@ export default function Dashboard() {
             {/* Modal Scrollable Contents */}
             <div className="p-6 overflow-y-auto flex-1 custom-scrollbar text-slate-700 bg-white leading-relaxed">
               <p className="text-xs md:text-sm whitespace-pre-wrap font-medium">
-                {selectedReport.content}
+                {selectedState.report.content}
               </p>
             </div>
 
@@ -399,15 +458,16 @@ export default function Dashboard() {
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 rounded-b-3xl">
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(selectedReport.content);
+                  navigator.clipboard.writeText(selectedState.report.content);
                 }}
                 className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 transition-colors"
               >
                 Copiar Texto
               </button>
               <button
-                onClick={() => setSelectedReport(null)}
-                className="px-4 py-2 bg-[#0079bf] hover:bg-[#0079bf]/95 text-white rounded-xl text-xs font-bold transition-all"
+                onClick={() => setSelectedState(null)}
+                className="px-4 py-2 text-white rounded-xl text-xs font-bold transition-all"
+                style={{ background: 'var(--color-primary)' }}
               >
                 Fechar
               </button>

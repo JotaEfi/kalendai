@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import authRoutes from './routes/authRoutes.js';
 import kanbanRoutes from './routes/kanbanRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
@@ -17,7 +18,7 @@ const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost,http://loc
   .filter(Boolean);
 
 app.use(helmet({
-  crossOriginResourcePolicy: false, // Ensure local uploads can be loaded in frontend
+  crossOriginResourcePolicy: false,
 }));
 app.use(cors({
   origin(origin, callback) {
@@ -30,6 +31,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Static Files Fallback for Uploads (MinIO local fallback)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/kanban', authenticateToken, kanbanRoutes);
@@ -37,7 +41,7 @@ app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/reports', authenticateToken, reportRoutes);
 app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/api/notifications', authenticateToken, notificationRoutes);
 
 // Basic Error handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
