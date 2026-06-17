@@ -117,7 +117,7 @@ services:
     environment:
       VITE_API_URL: http://localhost:3001
     ports:
-      - "5173:5173"
+      - "5173:3000"
     volumes:
       # Monta o código-fonte para HMR
       - ./frontend:/app
