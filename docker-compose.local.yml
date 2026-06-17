@@ -67,7 +67,7 @@ services:
     image: node:20
     container_name: kalendai_backend_local
     working_dir: /app
-    command: sh -c "npm install && npx prisma db push --skip-generate && npx tsx seed.ts && npm run dev"
+    command: sh -c "npm install && npx prisma generate && npx prisma db push && npx tsx seed.ts && npm run dev"
     environment:
       DATABASE_URL: postgresql://postgres:localpass@postgres:5432/kalendai?sslmode=disable&connection_limit=10&pool_timeout=10&connect_timeout=10
       JWT_SECRET: ${JWT_SECRET:-local-jwt-secret-dev}
