@@ -84,7 +84,7 @@ router.post('/refresh', async (req, res) => {
 
     jwt.verify(refreshToken, refreshSecret, async (err: any, decoded: any) => {
       if (err) {
-        await prisma.refreshToken.delete({ where: { token: refreshToken } });
+        await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
         return res.status(403).json({ error: 'Refresh token expirado' });
       }
 

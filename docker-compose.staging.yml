@@ -1,0 +1,121 @@
+# ============================================================
+# KalendAI — Ambiente STAGING (simula produção localmente)
+#
+# Uso: docker compose -f docker-compose.staging.yml up --build
+#
+# Diferenças em relação ao local.yml:
+#   - Builda as imagens do zero (igual ao CI/CD)
+#   - Frontend servido via nginx (não Vite dev server)
+#   - Backend compilado com tsc (não tsx watch)
+#   - NODE_ENV=production
+#
+# Serviços:
+#   http://localhost:8080      → Frontend (nginx, igual à VPS)
+#   http://localhost:8080/api  → Backend API (via proxy nginx)
+#   http://localhost:9000      → MinIO S3 API
+#   http://localhost:9001      → MinIO Console
+#   localhost:5433             → PostgreSQL (porta diferente para
+#                                não conflitar com local.yml)
+# ============================================================
+
+
+
+services:
+
+  # ── PostgreSQL com pgvector ───────────────────────────────
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: kalendai_postgres_staging
+    environment:
+      POSTGRES_DB: kalendai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: stagingpass
+    ports:
+      - "5433:5432"  # Porta 5433 para não conflitar com local.yml
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    networks:
+      - kalendai_staging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── MinIO ─────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: kalendai_minio_staging
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_staging_data:/data
+    networks:
+      - kalendai_staging
+    command: server /data --console-address ":9001"
+
+  # ── Backend (imagem compilada = idêntica à produção) ──────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kalendai_backend_staging
+    environment:
+      DATABASE_URL: postgresql://postgres:stagingpass@postgres:5432/kalendai?sslmode=disable&connection_limit=10&pool_timeout=10&connect_timeout=10
+      JWT_SECRET: ${JWT_SECRET:-staging-jwt-secret}
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-staging-refresh-secret}
+      REFRESH_TOKEN_EXPIRES_IN: 7d
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kalend-ai-images}
+      MINIO_PUBLIC_URL: http://localhost:9000
+      AI_PROVIDER: ${AI_PROVIDER:-deepseek}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-deepseek-chat}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      PORT: 3001
+      NODE_ENV: production
+      TIMEZONE: ${TIMEZONE:-America/Sao_Paulo}
+      DISABLE_WEEKENDS: ${DISABLE_WEEKENDS:-false}
+      MAX_ATTACHMENT_SIZE_MB: ${MAX_ATTACHMENT_SIZE_MB:-20}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@local.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador}
+      FRONTEND_URL: http://localhost:8080
+    volumes:
+      - uploads_staging_data:/app/uploads
+    networks:
+      - kalendai_staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  # ── Frontend (nginx + build React = idêntico à produção) ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kalendai_frontend_staging
+    ports:
+      - "8080:80"
+    networks:
+      - kalendai_staging
+    depends_on:
+      - backend
+
+networks:
+  kalendai_staging:
+    driver: bridge
+
+volumes:
+  postgres_staging_data:
+  minio_staging_data:
+  uploads_staging_data:
