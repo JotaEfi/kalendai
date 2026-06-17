@@ -46,6 +46,7 @@ services:
       - uploads_prod_data:/app/uploads
     networks:
       - network_swarm_public
+    restart: unless-stopped
     deploy:
       replicas: 1
       restart_policy:
@@ -56,22 +57,27 @@ services:
   # ── Frontend (Nginx + React) ──────────────────────────────
   frontend:
     image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-frontend:latest
+    depends_on:
+      - backend
     networks:
       - network_swarm_public
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
+      - "traefik.http.routers.kalendai.entrypoints=web,websecure"
+      - "traefik.http.routers.kalendai.tls=true"
+      - "traefik.http.routers.kalendai.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.kalendai.loadbalancer.server.port=80"
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
       labels:
-        # Traefik v2 — no Docker Swarm as labels ficam DENTRO de deploy.labels
         - "traefik.enable=true"
-        # Roteador HTTPS (websecure) — Traefik já redireciona web→websecure automaticamente
         - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
-        - "traefik.http.routers.kalendai.entrypoints=websecure"
+        - "traefik.http.routers.kalendai.entrypoints=web,websecure"
         - "traefik.http.routers.kalendai.tls=true"
-        # IMPORTANTE: nome do certresolver da sua VPS é letsencryptresolver
         - "traefik.http.routers.kalendai.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.kalendai.loadbalancer.server.port=80"
 
