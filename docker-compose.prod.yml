@@ -1,13 +1,14 @@
 version: "3.9"
 
 # ============================================================
-# KalendAI — Stack de Produção (apenas backend + frontend)
+# KalendAI — Stack de Produção (Docker Swarm + Traefik v2)
 #
 # Dependências externas (já rodando na VPS):
 #   - PostgreSQL: pgvector_postgres (rede network_swarm_public)
 #   - MinIO: https://s3.excellenceestudio.com.br
+#   - Traefik v2.11.3 com certresolver: letsencryptresolver
 #
-# Deploy: docker stack deploy -c docker-compose.prod.yml kalendai
+# Deploy: docker stack deploy -c docker-compose.prod.yml kalendai --with-registry-auth
 # ============================================================
 
 services:
@@ -45,7 +46,6 @@ services:
       - uploads_prod_data:/app/uploads
     networks:
       - network_swarm_public
-    restart: unless-stopped
     deploy:
       replicas: 1
       restart_policy:
@@ -56,28 +56,23 @@ services:
   # ── Frontend (Nginx + React) ──────────────────────────────
   frontend:
     image: ${DOCKER_USERNAME:-jotaefi107}/kalendai-frontend:latest
-    depends_on:
-      - backend
     networks:
       - network_swarm_public
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
-      - "traefik.http.routers.kalendai.entrypoints=web,websecure"
-      - "traefik.http.routers.kalendai.tls=true"
-      - "traefik.http.routers.kalendai.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kalendai.loadbalancer.server.port=80"
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
+        delay: 5s
+        max_attempts: 3
       labels:
+        # Traefik v2 — no Docker Swarm as labels ficam DENTRO de deploy.labels
         - "traefik.enable=true"
+        # Roteador HTTPS (websecure) — Traefik já redireciona web→websecure automaticamente
         - "traefik.http.routers.kalendai.rule=Host(`kalendai.excellenceestudio.com.br`)"
-        - "traefik.http.routers.kalendai.entrypoints=web,websecure"
+        - "traefik.http.routers.kalendai.entrypoints=websecure"
         - "traefik.http.routers.kalendai.tls=true"
-        - "traefik.http.routers.kalendai.tls.certresolver=letsencrypt"
+        # IMPORTANTE: nome do certresolver da sua VPS é letsencryptresolver
+        - "traefik.http.routers.kalendai.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.kalendai.loadbalancer.server.port=80"
 
 networks:
