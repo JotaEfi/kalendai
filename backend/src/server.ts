@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { prisma } from './lib/prisma.js';
 import { initializeMinio } from './services/minioService.js';
+import { migratePastActiveCards } from './services/kanbanService.js';
+
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 const __filename = fileURLToPath(import.meta.url);
@@ -53,6 +55,9 @@ const seedAdmin = async () => {
 seedAdmin().then(async () => {
   // Initialize MinIO Bucket
   await initializeMinio();
+
+  // Executar migração de cards ativos perdidos no passado
+  await migratePastActiveCards();
 
   app.listen(PORT, () => {
     console.log(`🚀 Backend server running on port ${PORT}`);

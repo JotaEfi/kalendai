@@ -396,3 +396,49 @@ export async function processAutomaticReport(rolledOverCards: any[] = []) {
     console.error('[Relatório V3] Erro geral:', err);
   }
 }
+
+/**
+ * Encontra todos os cards OPEN e IN_PROGRESS que ficaram perdidos no passado (antes de hoje)
+ * e os traz para a data de hoje. Mantém os cards DONE inalterados.
+ */
+export async function migratePastActiveCards() {
+  const todayDate = getTodayInConfiguredTz();
+  console.log(`[Migration] Iniciando migração de cards ativos do passado para hoje (${todayDate.toISOString().split('T')[0]})...`);
+  try {
+    // Buscar todos os cards OPEN/IN_PROGRESS com data inferior a hoje e isSnapshot = false
+    const pastActiveCards = await prisma.kanbanCard.findMany({
+      where: {
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+        isSnapshot: false,
+        dayDate: {
+          lt: todayDate
+        }
+      }
+    });
+
+    if (pastActiveCards.length === 0) {
+      console.log('[Migration] Nenhum card ativo do passado para migrar.');
+      return { migratedCount: 0 };
+    }
+
+    console.log(`[Migration] Encontrados ${pastActiveCards.length} cards ativos do passado. Migrando para hoje...`);
+
+    // Atualizar todos para hoje e marcar isRolledOver: true
+    const updateResult = await prisma.kanbanCard.updateMany({
+      where: {
+        id: { in: pastActiveCards.map(c => c.id) }
+      },
+      data: {
+        dayDate: todayDate,
+        isRolledOver: true
+      }
+    });
+
+    console.log(`[Migration] Migração concluída. ${updateResult.count} cards atualizados.`);
+    return { migratedCount: updateResult.count };
+  } catch (err) {
+    console.error('[Migration] Erro ao migrar cards ativos do passado:', err);
+    return { migratedCount: 0 };
+  }
+}
+

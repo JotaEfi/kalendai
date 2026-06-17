@@ -13,14 +13,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Por isso, não podemos referenciar variáveis declaradas aqui dentro.
 // A solução é usar vi.hoisted() para criar os mocks antes do hoisting.
 
-const { mockFindMany, mockCreate, mockUpdate, mockCardImageCreate, mockTransaction, mockDailyReportFindMany } = vi.hoisted(() => {
+const { mockFindMany, mockCreate, mockUpdate, mockUpdateMany, mockCardImageCreate, mockTransaction, mockDailyReportFindMany } = vi.hoisted(() => {
   const mockFindMany = vi.fn();
   const mockCreate = vi.fn();
   const mockUpdate = vi.fn();
+  const mockUpdateMany = vi.fn();
   const mockCardImageCreate = vi.fn();
   const mockTransaction = vi.fn();
   const mockDailyReportFindMany = vi.fn();
-  return { mockFindMany, mockCreate, mockUpdate, mockCardImageCreate, mockTransaction, mockDailyReportFindMany };
+  return { mockFindMany, mockCreate, mockUpdate, mockUpdateMany, mockCardImageCreate, mockTransaction, mockDailyReportFindMany };
 });
 
 vi.mock('../../lib/prisma.js', () => ({
@@ -29,6 +30,7 @@ vi.mock('../../lib/prisma.js', () => ({
       findMany: mockFindMany,
       create: mockCreate,
       update: mockUpdate,
+      updateMany: mockUpdateMany,
     },
     cardImage: {
       create: mockCardImageCreate,
@@ -51,7 +53,7 @@ vi.mock('../minioService.js', () => ({
 }));
 
 // Importar APÓS os mocks
-import { processDailyRollover, getNextReportVersion } from '../kanbanService.js';
+import { processDailyRollover, getNextReportVersion, migratePastActiveCards } from '../kanbanService.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -395,3 +397,67 @@ describe('getNextReportVersion', () => {
     expect(result.nextVersion).toBeNull();
   });
 });
+
+describe('migratePastActiveCards', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.TIMEZONE = 'UTC';
+  });
+
+  it('migra cards ativos do passado para hoje e marca isRolledOver: true', async () => {
+    vi.setSystemTime(new Date('2026-06-18T12:00:00Z')); // Hoje é 18 de Junho
+    const todayDate = makeDate(2026, 6, 18);
+
+    const pastCard = makeCard({
+      id: 'past-card',
+      status: 'OPEN',
+      dayDate: makeDate(2026, 6, 15), // Passado (15 de Junho)
+      isRolledOver: false,
+    });
+
+    mockFindMany.mockResolvedValue([pastCard]);
+    mockUpdateMany.mockResolvedValue({ count: 1 });
+
+    const result = await migratePastActiveCards();
+
+    expect(result.migratedCount).toBe(1);
+    expect(mockFindMany).toHaveBeenCalledWith({
+      where: {
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+        isSnapshot: false,
+        dayDate: {
+          lt: todayDate
+        }
+      }
+    });
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['past-card'] }
+      },
+      data: {
+        dayDate: todayDate,
+        isRolledOver: true
+      }
+    });
+  });
+
+  it('não migra nada se não houver cards ativos no passado', async () => {
+    vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
+    mockFindMany.mockResolvedValue([]);
+
+    const result = await migratePastActiveCards();
+
+    expect(result.migratedCount).toBe(0);
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('retorna migratedCount: 0 se houver erro no banco de dados', async () => {
+    vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
+    mockFindMany.mockRejectedValue(new Error('Erro de conexão ao BD'));
+
+    const result = await migratePastActiveCards();
+
+    expect(result.migratedCount).toBe(0);
+  });
+});
+
