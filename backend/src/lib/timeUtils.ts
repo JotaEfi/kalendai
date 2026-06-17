@@ -4,7 +4,7 @@
  * Usa `date-fns-tz` para cálculos corretos com fusos IANA.
  * Configurado pelo .env: TIMEZONE e DISABLE_WEEKENDS
  */
-import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { formatInTimeZone } from 'date-fns-tz';
 
 // ─── Configuração via .env ───────────────────────────────────────────────────
 
@@ -31,20 +31,17 @@ export function areWeekendsDisabled(): boolean {
 
 /**
  * Retorna a data de "hoje" no timezone configurado,
- * com horas zeradas (00:00:00.000 UTC).
+ * com horas zeradas em formato UTC (00:00:00.000Z).
  *
- * Exemplo: Se o timezone é America/Sao_Paulo (UTC-3) e UTC são 02:30,
- * retorna o dia anterior (23:30 BRT → ainda é "ontem" em SP).
+ * Garante consistência com o REST API que utiliza data UTC padrão.
  */
 export function getTodayInConfiguredTz(): Date {
   const tz = getConfiguredTimezone();
   const now = new Date();
-  // Converte para a data local no timezone configurado
-  const zonedNow = toZonedTime(now, tz);
-  // Zera a hora para obter o "início do dia" naquele timezone
-  zonedNow.setHours(0, 0, 0, 0);
-  // Converte de volta para UTC para armazenar no banco
-  return fromZonedTime(zonedNow, tz);
+  // Obtém a string de data local no fuso configurado
+  const dateStr = formatInTimeZone(now, tz, 'yyyy-MM-dd');
+  // Cria a data meia-noite UTC para bater perfeitamente com as datas salvas via API
+  return new Date(`${dateStr}T00:00:00.000Z`);
 }
 
 // ─── Lógica de próximo dia útil ─────────────────────────────────────────────
@@ -54,9 +51,7 @@ export function getTodayInConfiguredTz(): Date {
  * no timezone configurado.
  */
 export function getDayOfWeekInTz(date: Date): number {
-  const tz = getConfiguredTimezone();
-  const zoned = toZonedTime(date, tz);
-  return zoned.getDay();
+  return date.getUTCDay();
 }
 
 /**
@@ -83,11 +78,7 @@ export function isWeekend(date: Date): boolean {
  */
 export function getNextRolloverDay(fromDate: Date): Date {
   const weekendsDisabled = areWeekendsDisabled();
-  const tz = getConfiguredTimezone();
-
-  // Trabalhamos com cópia do "fromDate" no timezone configurado
-  const zonedFrom = toZonedTime(fromDate, tz);
-  const dow = zonedFrom.getDay(); // 0=Dom, 1=Seg, ..., 5=Sex, 6=Sáb
+  const dow = fromDate.getUTCDay(); // 0=Dom, 1=Seg, ..., 5=Sex, 6=Sáb
 
   let daysToAdd = 1; // padrão: próximo dia
 
@@ -105,11 +96,9 @@ export function getNextRolloverDay(fromDate: Date): Date {
     // Segunda a Quinta → +1 normal
   }
 
-  const nextDay = new Date(zonedFrom);
-  nextDay.setDate(nextDay.getDate() + daysToAdd);
-  nextDay.setHours(0, 0, 0, 0);
-
-  return fromZonedTime(nextDay, tz);
+  const nextDay = new Date(fromDate);
+  nextDay.setUTCDate(nextDay.getUTCDate() + daysToAdd);
+  return nextDay;
 }
 
 /**
@@ -132,6 +121,6 @@ export function shouldSkipRolloverToday(): boolean {
 export function getYesterdayInConfiguredTz(): Date {
   const today = getTodayInConfiguredTz();
   const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
   return yesterday;
 }
