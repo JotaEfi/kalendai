@@ -6,8 +6,10 @@ WORKDIR /app
 # Copiar arquivos de dependência
 COPY package*.json ./
 
-# Instalar todas as dependências
-RUN npm ci --audit=false
+# Instalar dependências
+# Usando npm install em vez de npm ci: em monorepo workspace, o package-lock.json
+# fica na raiz e não é copiado para o contexto Docker do subprojeto.
+RUN npm install --audit=false
 
 # Copiar código e compilar a aplicação
 COPY . .
