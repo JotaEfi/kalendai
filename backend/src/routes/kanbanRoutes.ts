@@ -230,7 +230,8 @@ router.get('/month/:year/:month', async (req: AuthRequest, res: any) => {
           gte: startDate,
           lte: endDate,
         },
-        isPendingAssignment: false
+        isPendingAssignment: false,
+        isSnapshot: false
       },
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
     });
@@ -257,7 +258,8 @@ router.get('/:date', async (req: AuthRequest, res: any) => {
       where: {
         userId,
         dayDate,
-        isPendingAssignment: false
+        isPendingAssignment: false,
+        isSnapshot: false
       },
       include: {
         images: true

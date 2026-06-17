@@ -24,16 +24,16 @@ export async function processDailyRollover() {
   }
 
   try {
-    const yesterdayDate = getYesterdayInConfiguredTz();
-    // Destino dos cards: próximo dia útil calculado a partir de ontem
-    const targetDate = getNextRolloverDay(yesterdayDate);
+    const todayDate = getTodayInConfiguredTz();
+    // Destino dos cards: próximo dia útil calculado a partir de hoje
+    const targetDate = getNextRolloverDay(todayDate);
 
-    console.log(`[Rollover] Origem: ${yesterdayDate.toISOString().split('T')[0]} → Destino: ${targetDate.toISOString().split('T')[0]}`);
+    console.log(`[Rollover] Origem: ${todayDate.toISOString().split('T')[0]} → Destino: ${targetDate.toISOString().split('T')[0]}`);
 
-    // 1. Buscar todos os cards ativos de ontem em uma única query (anti-N+1)
+    // 1. Buscar todos os cards ativos de hoje em uma única query (anti-N+1)
     const activeCards = await prisma.kanbanCard.findMany({
       where: {
-        dayDate: yesterdayDate,
+        dayDate: todayDate,
         status: { in: ['OPEN', 'IN_PROGRESS'] },
         isSnapshot: false
       },
@@ -41,7 +41,7 @@ export async function processDailyRollover() {
     });
 
     if (activeCards.length === 0) {
-      console.log('[Rollover] Nenhum card ativo de ontem para processar.');
+      console.log('[Rollover] Nenhum card ativo de hoje para processar.');
       return { rolledOver: [] };
     }
 
@@ -299,14 +299,8 @@ export async function processAutomaticReport(rolledOverCards: any[] = []) {
         include: { images: true }
       });
 
-      const openCards = await prisma.kanbanCard.findMany({
-        where: {
-          userId: user.id,
-          dayDate: todayDate,
-          status: { in: ['OPEN', 'IN_PROGRESS'] },
-          isSnapshot: false
-        }
-      });
+      // Filtrar os cards transportados que pertencem a este usuário
+      const userRolledOver = rolledOverCards.filter(c => c.userId === user.id);
 
       const tarefasConcluidas: any[] = [];
       const tarefasTransportadas: string[] = [];
@@ -327,7 +321,7 @@ export async function processAutomaticReport(rolledOverCards: any[] = []) {
         }
       }
 
-      for (const card of openCards) {
+      for (const card of userRolledOver) {
         tarefasTransportadas.push(card.title);
       }
 
@@ -339,7 +333,7 @@ export async function processAutomaticReport(rolledOverCards: any[] = []) {
         data: todayDate.toISOString().split('T')[0],
         versao: 3,
         tipo: 'automatico',
-        total_criadas: cards.length,
+        total_criadas: cards.length + userRolledOver.length,
         total_concluidas: tarefasConcluidas.length,
         tarefas_concluidas: tarefasConcluidas,
         tarefas_transportadas_para_amanha: tarefasTransportadas,

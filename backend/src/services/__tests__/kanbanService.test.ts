@@ -67,7 +67,7 @@ function makeCard(overrides: Partial<any> = {}) {
     color: '#ffffff',
     status: 'OPEN',
     userId: 'user-123',
-    dayDate: makeDate(2026, 6, 1),
+    dayDate: makeDate(2026, 6, 2),
     isSnapshot: false,
     isRolledOver: false,
     originalDayDate: null,
@@ -101,7 +101,7 @@ describe('processDailyRollover', () => {
 
   // ─── Sem cards ativos ────────────────────────────────────────────────────
 
-  it('retorna { rolledOver: [] } quando não há cards ativos ontem', async () => {
+  it('retorna { rolledOver: [] } quando não há cards ativos hoje', async () => {
     vi.setSystemTime(new Date('2026-06-02T12:00:00Z')); // Terça
     mockFindMany.mockResolvedValue([]);
 
@@ -116,10 +116,10 @@ describe('processDailyRollover', () => {
   it('move um card OPEN para o dia seguinte', async () => {
     vi.setSystemTime(new Date('2026-06-02T12:00:00Z')); // Hoje = Terça
 
-    const card = makeCard({ status: 'OPEN', dayDate: makeDate(2026, 6, 1) });
+    const card = makeCard({ status: 'OPEN', dayDate: makeDate(2026, 6, 2) });
     mockFindMany.mockResolvedValue([card]);
     mockCreate.mockResolvedValue({ ...card, id: 'snapshot-id' });
-    mockUpdate.mockResolvedValue({ ...card, dayDate: makeDate(2026, 6, 2) });
+    mockUpdate.mockResolvedValue({ ...card, dayDate: makeDate(2026, 6, 3) });
 
     const result = await processDailyRollover();
 
@@ -206,8 +206,8 @@ describe('processDailyRollover', () => {
 
   it('SEXTA → SEGUNDA quando DISABLE_WEEKENDS=true', async () => {
     process.env.DISABLE_WEEKENDS = 'true';
-    // Hoje é segunda 2026-06-08 → ontem era sexta 2026-06-05
-    vi.setSystemTime(new Date('2026-06-08T12:00:00Z'));
+    // Hoje é sexta 2026-06-05
+    vi.setSystemTime(new Date('2026-06-05T12:00:00Z'));
 
     const card = makeCard({ status: 'OPEN', dayDate: makeDate(2026, 6, 5) });
     mockFindMany.mockResolvedValue([card]);
@@ -281,7 +281,7 @@ describe('processDailyRollover', () => {
     const originalDate = makeDate(2026, 5, 31); // Card veio de domingo 31/Mai
     const card = makeCard({
       status: 'OPEN',
-      dayDate: makeDate(2026, 6, 2),
+      dayDate: makeDate(2026, 6, 3),
       isRolledOver: true,
       originalDayDate: originalDate
     });
