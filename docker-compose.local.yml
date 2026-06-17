@@ -64,7 +64,7 @@ services:
 
   # ── Backend API (Node.js com tsx watch = hot-reload) ──────
   backend:
-    image: node:20-alpine
+    image: node:20
     container_name: kalendai_backend_local
     working_dir: /app
     command: sh -c "npm install && npx prisma db push --skip-generate && npx tsx seed.ts && npm run dev"
