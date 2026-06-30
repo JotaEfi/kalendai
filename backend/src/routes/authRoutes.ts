@@ -3,16 +3,18 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 import { authenticateToken, AuthRequest } from '../middleware/authMiddleware.js';
+import { validateRequest } from '../middlewares/validator.js';
+import { authLimiter } from '../middlewares/rateLimiter.js';
+import { loginSchema, profileSchema, refreshSchema } from '../schemas/authSchemas.js';
 
 const router = Router();
 
-router.put('/profile', authenticateToken as any, async (req: AuthRequest, res: any) => {
+router.put('/profile', authenticateToken as any, validateRequest(profileSchema), async (req: AuthRequest, res: any) => {
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: 'Não autorizado' });
     
     const { name, email } = req.body;
-    if (!name || !email) return res.status(400).json({ error: 'Nome e email são obrigatórios' });
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -26,7 +28,7 @@ router.put('/profile', authenticateToken as any, async (req: AuthRequest, res: a
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, validateRequest(loginSchema), async (req, res) => {
   try {
     const jwtSecret = process.env.JWT_SECRET;
     const refreshSecret = process.env.REFRESH_TOKEN_SECRET;
@@ -67,7 +69,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', authLimiter, validateRequest(refreshSchema), async (req, res) => {
   try {
     const jwtSecret = process.env.JWT_SECRET;
     const refreshSecret = process.env.REFRESH_TOKEN_SECRET;
@@ -77,7 +79,6 @@ router.post('/refresh', async (req, res) => {
     }
 
     const { refreshToken } = req.body;
-    if (!refreshToken) return res.status(401).json({ error: 'Refresh token requerido' });
 
     const storedToken = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
     if (!storedToken) return res.status(403).json({ error: 'Refresh token inválido ou revogado' });

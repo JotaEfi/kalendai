@@ -24,26 +24,78 @@ KalendAI é uma aplicação full-stack para gestão de produtividade pessoal ou 
 | IA | Provedor unico configuravel via `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` |
 | Infra | Docker, Docker Compose, Nginx, GitHub Actions |
 
-## Rodando Localmente
+## Como Rodar o Projeto Localmente
 
+O KalendAI utiliza Docker para prover o banco de dados PostgreSQL com `pgvector` e o armazenamento de arquivos MinIO (S3 local). Siga os passos abaixo para subir o ambiente completo de desenvolvimento.
+
+### Pré-requisitos
+- Node.js (v20 ou superior)
+- Docker e Docker Compose instalados
+
+### Passo 1: Clonar e Instalar Dependências
+Instale as dependências na raiz do monorepo:
 ```bash
 npm install
+```
+
+### Passo 2: Configurar as Variáveis de Ambiente
+Copie o arquivo de exemplo na raiz do projeto:
+```bash
 cp .env.example .env
-npm run prisma:generate --workspace=backend
+```
+*(Opcional: Ajuste as variáveis como `JWT_SECRET` ou chaves de IA se necessário).*
+
+### Passo 3: Iniciar a Infraestrutura Local (Docker)
+Suba os containers do PostgreSQL com extensão de vetores e do MinIO em segundo plano:
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
+
+### Passo 4: Sincronizar o Banco de Dados e Gerar o Cliente Prisma
+Com os containers rodando, envie o esquema de tabelas do Prisma para a instância local do Postgres e gere as tipagens do client:
+```bash
+# Executado a partir do host (raiz do projeto)
+$env:DATABASE_URL="postgresql://postgres:localpass@localhost:5435/kalendai?sslmode=disable"
+npx prisma db push --schema backend/prisma/schema.prisma
+```
+
+### Passo 5 (Recomendado): Popular Dados de Demonstração (Mostruário)
+Para preencher o calendário, o Kanban e o Dashboard com dados realistas (tarefas de alta fidelidade e relatórios diários V1, V2 e V3 para o mês completo de Junho/2026), rode o nosso script de população:
+```bash
+$env:DATABASE_URL="postgresql://postgres:localpass@localhost:5435/kalendai?sslmode=disable"
+npx tsx backend/populateMonth.ts
+```
+*Credenciais geradas:*
+* **Usuário:** `joao@kalend.ai` | **Senha:** `Joao@1234`
+* **Administrador Padrão:** `joaodaviabc@gmail.com` | **Senha:** `Bobebelinha5613@1`
+
+### Passo 6: Iniciar os Servidores de Desenvolvimento
+Inicie os servidores do Frontend (Vite) e Backend (Express) com hot-reload ativo:
+```bash
 npm run dev
 ```
 
-Por padrao:
+* **Frontend**: Acesse em [http://localhost:5173](http://localhost:5173)
+* **Backend API**: Rodando em [http://localhost:3001](http://localhost:3001)
 
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:3001`
-- API: `http://localhost:3001/api`
+---
 
-Com Docker:
+## 🧪 Qualidade de Código & Testes
 
-```bash
-docker compose up --build -d
-```
+Mantemos suítes estritas para garantir conformidade de segurança e qualidade do código:
+
+* **Testes de Integração (Vitest)**: Valida Helmet, CORS, Zod Schemas e Rate Limiters.
+  ```bash
+  npm run test --workspace=backend
+  ```
+* **Linter Estático de Segurança (SAST)**: Analisa o código em busca de injeções dinâmicas de código.
+  ```bash
+  npm run lint
+  ```
+* **Checagem de Licenças de Dependências**: Garante conformidade de licenças comerciais.
+  ```bash
+  npm run license-check
+  ```
 
 ## Configurando O `.env`
 

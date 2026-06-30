@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/authMiddleware.js';
 import { generateDailyReport } from '../services/aiProvider.js';
 import { uploadFile, getPresignedUrl, deleteFile } from '../services/minioService.js';
 import { generateReportFallback } from '../services/aiService.js';
+import { validateRequest } from '../middlewares/validator.js';
+import { cardCreateSchema, cardUpdateSchema } from '../schemas/kanbanSchemas.js';
 import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
@@ -283,7 +285,7 @@ router.get('/:date', async (req: AuthRequest, res: any) => {
 });
 
 // POST to create a new kanban card
-router.post('/', async (req: AuthRequest, res) => {
+router.post('/', validateRequest(cardCreateSchema), async (req: AuthRequest, res) => {
   try {
     const { title, description, color, dayDate } = req.body;
     const userId = req.user?.userId || 'placeholder-user-id';
@@ -324,7 +326,7 @@ router.post('/', async (req: AuthRequest, res) => {
 });
 
 // PUT to edit an existing kanban card
-router.put('/:id', async (req: AuthRequest, res: any) => {
+router.put('/:id', validateRequest(cardUpdateSchema), async (req: AuthRequest, res: any) => {
   try {
     const { id } = req.params;
     const userId = req.user?.userId;

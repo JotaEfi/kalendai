@@ -30,7 +30,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: localpass
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_local_data:/var/lib/postgresql/data
     networks:

@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "npm run dev --workspace=frontend & npm run dev --workspace=backend",
     "build": "npm run build --workspaces",
-    "lint": "npm run lint --workspaces",
+    "lint": "eslint . --ext .ts,.tsx",
+    "license-check": "license-checker --onlyAllow \"MIT;Apache-2.0;ISC;BSD-3-Clause;BSD-2-Clause;BlueOak-1.0.0;MPL-2.0;CC-BY-4.0;CC-BY-3.0;CC0-1.0;0BSD;Unlicense;WTFPL;MIT-0;Public Domain\" --excludePrivatePackages",
     "ci": "npm run prisma:generate --workspace=backend && npm run build --workspaces",
     "start": "node backend/dist/server.js"
   },
@@ -20,6 +21,11 @@
     "react-router-dom": "^7.15.1"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.62.1",
+    "eslint": "^10.6.0",
+    "eslint-plugin-security": "^4.0.1",
+    "license-checker": "^25.0.1",
     "sqlite3": "^6.0.1"
   }
 }

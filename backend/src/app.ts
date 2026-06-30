@@ -1,7 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
 import path from 'path';
+import { configureHelmet } from './middlewares/security.js';
+import { configureCors } from './middlewares/cors.js';
+import { globalLimiter } from './middlewares/rateLimiter.js';
 import authRoutes from './routes/authRoutes.js';
 import kanbanRoutes from './routes/kanbanRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
@@ -12,23 +13,13 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
 
 const app = express();
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost,http://localhost:3000')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
 
-app.use(helmet({
-  crossOriginResourcePolicy: false,
-}));
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Origin not allowed by CORS'));
-  },
-  credentials: true,
-}));
+// Configura proxy confiável para ler IP real atrás do Nginx
+app.set('trust proxy', process.env.TRUST_PROXY === 'true' || 1);
+
+app.use(configureHelmet());
+app.use(configureCors());
+app.use(globalLimiter);
 app.use(express.json());
 
 // Static Files Fallback for Uploads (MinIO local fallback)
