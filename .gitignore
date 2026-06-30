@@ -28,3 +28,24 @@ backend/prisma/dump.sql
 Thumbs.db
 .idea/
 .vscode/
+
+# AI Agents & GSD Framework
+.planning/
+.gsd/
+.gemini/
+.claude/
+.cursor/
+.aider*
+.gpt-engineer/
+.continue/
+.openinterpreter/
+.auto-gpt/
+task.md
+implementation_plan.md
+walkthrough.md
+PLAN.md
+SPEC.md
+UI-SPEC.md
+AI-SPEC.md
+EVAL-REVIEW.md
+UAT-REPORT.md
